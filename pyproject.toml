@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hackrf-radar"
+version = "0.1.0"
+description = "Passive 0 dBm RX-only multi-human Wi-Fi tomographic radar and vital-sign sensing for HackRF One"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+qt = [
+    "pyqtgraph>=0.13",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+hackrf-radar = "hackrf_radar.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hackrf_radar*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

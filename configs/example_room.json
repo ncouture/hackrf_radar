@@ -1,0 +1,101 @@
+{
+  "room_name": "6m x 5m Multi-AP + IoT Lab",
+  "room_width": 6.0,
+  "room_height": 5.0,
+  "rx": {
+    "rx_pos": [3.0, 0.35],
+    "channels": [1, 6, 11],
+    "dwell_ms": 80.0,
+    "sample_rate_hz": 20000000.0,
+    "lna_db": 24,
+    "vga_db": 20,
+    "amp_enable": false,
+    "bias_tee_enable": false,
+    "dc_offset_removal": true,
+    "pll_settle_ms": 3.0,
+    "backend": "auto",
+    "zmq_endpoint": null
+  },
+  "anchors": [
+    {
+      "bssid": "AA:BB:CC:00:00:01",
+      "x": 0.4,
+      "y": 4.7,
+      "label": "NW Ceiling AP-1",
+      "channel": 1,
+      "role": "ap"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:02",
+      "x": 3.0,
+      "y": 4.75,
+      "label": "North Mesh AP-2",
+      "channel": 6,
+      "role": "ap"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:03",
+      "x": 5.6,
+      "y": 4.7,
+      "label": "NE Ceiling AP-3",
+      "channel": 11,
+      "role": "ap"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:04",
+      "x": 0.25,
+      "y": 2.6,
+      "label": "West Wall Thermostat",
+      "channel": 6,
+      "role": "iot"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:05",
+      "x": 5.75,
+      "y": 2.6,
+      "label": "East Shelf Speaker",
+      "channel": 1,
+      "role": "iot"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:06",
+      "x": 0.35,
+      "y": 1.15,
+      "label": "SW Desk Printer",
+      "channel": 11,
+      "role": "iot"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:07",
+      "x": 5.65,
+      "y": 1.15,
+      "label": "SE Bench Camera",
+      "channel": 6,
+      "role": "iot"
+    },
+    {
+      "bssid": "AA:BB:CC:00:00:08",
+      "x": 1.7,
+      "y": 4.75,
+      "label": "North Smart Plug",
+      "channel": 11,
+      "role": "iot"
+    }
+  ],
+  "auto_discovery": {
+    "enabled": true,
+    "min_packets": 3,
+    "perimeter_margin_m": 0.25,
+    "use_rssi_log_distance": true,
+    "ref_rssi_1m_dbm": -40.0,
+    "path_loss_exponent": 2.4,
+    "enable_sifs_peer_chords": true
+  },
+  "solver": {
+    "grid_shape": [40, 34],
+    "solver_method": "fista_tv",
+    "window_s": 1.5,
+    "calibration_s": 0.0,
+    "target_fps": 20.0
+  }
+}
