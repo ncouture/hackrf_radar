@@ -30,6 +30,9 @@ hackrf-radar = "hackrf_radar.cli:main"
 where = ["."]
 include = ["hackrf_radar*"]
 
+[tool.setuptools.package-data]
+"hackrf_radar.web" = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
