@@ -45,6 +45,9 @@ class LinkFeatureSummary:
     seq_gap_rate: float
     tsf_drift_ppm: float | None
     psd_linear: np.ndarray | None = None
+    csi_amp: np.ndarray | None = None
+    csi_phase: np.ndarray | None = None
+    baseline_csi_amp: np.ndarray | None = None
 
 
 class _SingleStreamStats:
@@ -105,6 +108,14 @@ class LinkWindowExtractor:
         f_coarse = np.linspace(1.25, 25.0, 192, dtype=np.float64)
         self.psd_freqs_hz: np.ndarray = np.concatenate([f_fine, f_coarse])
         self._psd_omegas: np.ndarray = 2.0 * np.pi * self.psd_freqs_hz
+
+    def set_window_s(self, window_s: float) -> float:
+        """Update the sliding feature extraction window duration in seconds."""
+        val = float(window_s)
+        if not math.isfinite(val) or not (0.2 <= val <= 10.0):
+            raise ValueError(f"window_s must be in [0.2, 10.0], got {window_s}")
+        self.window_s = val
+        return self.window_s
 
     @property
     def observed_bssids(self) -> set[str]:
@@ -518,6 +529,13 @@ class LinkWindowExtractor:
                     seq_gap_rate=seq_gap_rate,
                     tsf_drift_ppm=self._bssid_tsf_ppm.get(chord.tx_bssid),
                     psd_linear=psd_lin,
+                    csi_amp=np.abs(csi_mean).astype(np.float64),
+                    csi_phase=np.angle(csi_mean).astype(np.float64),
+                    baseline_csi_amp=(
+                        np.abs(st.baseline_csi).astype(np.float64)
+                        if st.baseline_csi is not None
+                        else None
+                    ),
                 )
             )
 
@@ -619,6 +637,13 @@ class LinkWindowExtractor:
                     seq_gap_rate=peer_gap_rate,
                     tsf_drift_ppm=None,
                     psd_linear=psd_lin,
+                    csi_amp=np.abs(csi_mean).astype(np.float64),
+                    csi_phase=np.angle(csi_mean).astype(np.float64),
+                    baseline_csi_amp=(
+                        np.abs(pst.baseline_csi).astype(np.float64)
+                        if pst.baseline_csi is not None
+                        else None
+                    ),
                 )
             )
 
