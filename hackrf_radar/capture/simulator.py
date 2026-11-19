@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -117,6 +118,8 @@ class SyntheticRadarStream:
 
         self._t0: float = 1_700_000_000.0
         self._last_ts: float = self._t0
+        self._override_lock = threading.Lock()
+        self._target_overrides: dict[int, tuple[float, float]] = {}
 
     def _build_anchors(
         self, tx_positions: Mapping[str, tuple[float, float]] | None
@@ -303,7 +306,42 @@ class SyntheticRadarStream:
         """Return canonical BSSID -> (x_m, y_m) map of simulated room transmitters."""
         return {a.bssid: (a.x, a.y) for a in self._anchors}
 
+    def set_interactive_target(
+        self, target_id: int, x: float, y: float
+    ) -> dict[str, Any]:
+        """Override a simulated human position in realtime (e.g. from the web UI)."""
+        tid = int(target_id)
+        if not self._humans:
+            raise ValueError("Cannot position target in an empty-room simulation.")
+        valid_ids = {s.target_id for s in self._humans}
+        if tid not in valid_ids:
+            tid = self._humans[0].target_id
+        margin = 0.35
+        cx = min(max(float(x), margin), max(margin, self.room_width - margin))
+        cy = min(max(float(y), margin), max(margin, self.room_height - margin))
+        with self._override_lock:
+            self._target_overrides[tid] = (cx, cy)
+        return {"id": tid, "x": round(cx, 3), "y": round(cy, 3)}
+
+    def clear_interactive_targets(self) -> None:
+        """Clear interactive position overrides and resume scripted human trajectories."""
+        with self._override_lock:
+            self._target_overrides.clear()
+
     def _eval_human(self, spec: _SimHumanSpec, rel_t: float) -> dict[str, Any]:
+        with self._override_lock:
+            override = self._target_overrides.get(spec.target_id)
+        if override is not None:
+            return {
+                "id": spec.target_id,
+                "x": override[0],
+                "y": override[1],
+                "vx": 0.0,
+                "vy": 0.0,
+                "activity": "stationary",
+                "breathing_bpm": spec.breathing_bpm,
+                "phase0": spec.phase0,
+            }
         if spec.mode == "stationary" or spec.speed_mps <= 1e-4:
             return {
                 "id": spec.target_id,

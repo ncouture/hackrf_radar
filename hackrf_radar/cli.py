@@ -9,8 +9,9 @@ import json
 import os
 import signal
 import sys
+import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from typing import Any
 from .config import RadarConfig, load_config
 from .plotter import (
     _GUI_BACKEND_ERRORS,
+    CompositeRadarDashboard,
     create_plotter,
     has_gui_display,
     select_ui_backend,
@@ -62,6 +64,7 @@ class PipelineRunResult:
     last_frame: Any = None
     snapshot_path: Path | None = None
     recorded_path: Path | None = None
+    web_url: str | None = None
     render_times_ms: list[float] = field(default_factory=list)
 
 
@@ -150,9 +153,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--ui",
-        choices=("auto", "pyqtgraph", "matplotlib", "tui", "none"),
+        choices=("auto", "pyqtgraph", "matplotlib", "tui", "web", "none"),
         default="auto",
-        help="Live radar UI backend (default: auto).",
+        help="Live radar UI backend (default: auto; use 'web' for the realtime browser UI).",
+    )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Expose the realtime tomography web interface alongside the active --ui backend.",
+    )
+    parser.add_argument(
+        "--web-host",
+        type=str,
+        default="127.0.0.1",
+        help="Bind host for the realtime web interface (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=8765,
+        help="TCP port for the realtime web interface (default: 8765; 0 for ephemeral port).",
     )
     parser.add_argument(
         "--no-gui",
@@ -246,7 +266,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
+def run_pipeline(
+    args: argparse.Namespace,
+    *,
+    on_web_ready: Callable[[str], None] | None = None,
+    stop_event: threading.Event | None = None,
+) -> PipelineRunResult:
     """Execute the passive Wi-Fi tomographic radar pipeline from parsed CLI arguments."""
     from .capture import HackRFPacketCapture, SyntheticRadarStream
     from .tomography import TomographicRadarEngine
@@ -283,9 +308,13 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
             "Safety violation: HackRF AMP and bias-tee must remain disabled."
         )
 
+    use_web = (args.ui == "web") or bool(getattr(args, "web", False))
+    web_host = str(getattr(args, "web_host", "127.0.0.1"))
+    web_port = int(getattr(args, "web_port", 8765))
+
     headless_env = (
         bool(args.no_gui)
-        or args.ui == "none"
+        or args.ui in {"none", "web"}
         or os.environ.get("MPLBACKEND", "").lower() == "agg"
         or os.environ.get("QT_QPA_PLATFORM", "").lower() in {"offscreen", "minimal"}
         or not has_gui_display()
@@ -297,13 +326,19 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
 
     duration_s: float | None = args.duration
     if duration_s is None and args.mode == "sim":
-        duration_s = 6.0
+        if use_web and not args.fast and args.save_snapshot is None:
+            # Continuous realtime streaming until Ctrl+C / stop_event in interactive web mode
+            duration_s = None
+        else:
+            duration_s = 6.0
 
     pace_realtime = bool(args.realtime) or (
         not args.fast
-        and not headless_plot
-        and args.mode == "sim"
         and args.save_snapshot is None
+        and (
+            (not headless_plot and args.mode == "sim")
+            or (use_web and args.mode in {"sim", "replay"})
+        )
     )
 
     known_tx = cfg.known_tx_positions()
@@ -313,7 +348,11 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
     capture_backend = cfg.rx.backend
 
     stop_requested = False
-    prev_sigint = signal.getsignal(signal.SIGINT)
+    is_main_thread = threading.current_thread() is threading.main_thread()
+    prev_sigint = signal.getsignal(signal.SIGINT) if is_main_thread else None
+
+    def _should_stop() -> bool:
+        return stop_requested or (stop_event is not None and stop_event.is_set())
 
     def _on_sigint(_sig: int, _frm: Any) -> None:
         nonlocal stop_requested
@@ -322,9 +361,11 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
     record_fh = None
     recorded_path: Path | None = None
     dashboard: Any = None
+    web_url: str | None = None
 
     try:
-        signal.signal(signal.SIGINT, _on_sigint)
+        if is_main_thread:
+            signal.signal(signal.SIGINT, _on_sigint)
 
         if args.record:
             recorded_path = Path(args.record)
@@ -373,7 +414,7 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
             iter_params = inspect.signature(capture_obj.iter_events).parameters
             if "stop_check" in iter_params:
                 event_iter = capture_obj.iter_events(
-                    duration_s=duration_s, stop_check=lambda: stop_requested
+                    duration_s=duration_s, stop_check=_should_stop
                 )
             else:
                 event_iter = capture_obj.iter_events(duration_s=duration_s)
@@ -398,7 +439,7 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
                 )
                 capture_backend = f"replay:pcap({in_path.name})"
                 event_iter = capture_obj.iter_events(
-                    duration_s=duration_s, stop_check=lambda: stop_requested
+                    duration_s=duration_s, stop_check=_should_stop
                 )
             else:
                 capture_obj = HackRFPacketCapture(
@@ -410,7 +451,7 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
                 )
                 capture_backend = f"replay:iq({in_path.name})"
                 event_iter = capture_obj.iter_events(
-                    duration_s=duration_s, stop_check=lambda: stop_requested
+                    duration_s=duration_s, stop_check=_should_stop
                 )
         else:
             raise ValueError(f"Unsupported mode: {args.mode!r}")
@@ -433,17 +474,112 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
         )
 
         show_gt = (args.mode == "sim") and (not args.no_gt)
-        if args.ui != "none":
-            dashboard = create_plotter(
-                args.ui,
-                no_gui=bool(args.no_gui),
-                headless=headless_plot,
+
+        def _web_control_handler(cmd: dict[str, Any]) -> dict[str, Any]:
+            applied: dict[str, Any] = {}
+            solver_updates = {
+                k: cmd[k]
+                for k in ("solver_method", "lam_tv", "lam_l2", "window_s")
+                if k in cmd
+            }
+            if solver_updates:
+                applied["solver"] = engine.set_solver_params(**solver_updates)
+            action = cmd.get("action")
+            if action == "calibrate_baseline":
+                engine.calibrate_baseline()
+                applied["calibrated"] = True
+            elif action == "reset_sim_targets":
+                if sim_stream is None:
+                    raise ValueError("Target reset is only available in --mode sim.")
+                sim_stream.clear_interactive_targets()
+                applied["sim_targets_reset"] = True
+            if "sim_target" in cmd:
+                if sim_stream is None:
+                    raise ValueError(
+                        "Interactive target dragging is only available in --mode sim."
+                    )
+                tgt = cmd["sim_target"]
+                applied["sim_target"] = sim_stream.set_interactive_target(
+                    tgt["id"], tgt["x"], tgt["y"]
+                )
+            return applied
+
+        web_config_summary: dict[str, Any] = {
+            "room_name": cfg.room_name,
+            "room_width": cfg.room_width,
+            "room_height": cfg.room_height,
+            "mode": args.mode,
+            "capture_backend": capture_backend,
+            "channels": list(cfg.rx.channels),
+            "lna_db": cfg.rx.lna_db,
+            "vga_db": cfg.rx.vga_db,
+            "grid_shape": list(cfg.solver.grid_shape),
+            "solver_method": cfg.solver.solver_method,
+            "passive_rx_only": True,
+        }
+        sim_interactive = (
+            (args.mode == "sim")
+            and (sim_stream is not None)
+            and (getattr(sim_stream, "num_humans", 0) > 0)
+        )
+
+        primary_dash: Any = None
+        web_dash: Any = None
+        if args.ui == "web":
+            web_dash = create_plotter(
+                "web",
                 room_width=cfg.room_width,
                 room_height=cfg.room_height,
                 anchor_positions=known_tx,
                 anchor_labels=anchor_labels,
                 show_ground_truth=show_gt,
+                web_host=web_host,
+                web_port=web_port,
+                config_summary=web_config_summary,
+                control_handler=_web_control_handler,
+                sim_interactive=sim_interactive,
             )
+            dashboard = web_dash
+        else:
+            if args.ui != "none":
+                primary_dash = create_plotter(
+                    args.ui,
+                    no_gui=bool(args.no_gui),
+                    headless=headless_plot,
+                    room_width=cfg.room_width,
+                    room_height=cfg.room_height,
+                    anchor_positions=known_tx,
+                    anchor_labels=anchor_labels,
+                    show_ground_truth=show_gt,
+                )
+            if use_web:
+                web_dash = create_plotter(
+                    "web",
+                    room_width=cfg.room_width,
+                    room_height=cfg.room_height,
+                    anchor_positions=known_tx,
+                    anchor_labels=anchor_labels,
+                    show_ground_truth=show_gt,
+                    web_host=web_host,
+                    web_port=web_port,
+                    config_summary=web_config_summary,
+                    control_handler=_web_control_handler,
+                    sim_interactive=sim_interactive,
+                )
+            if primary_dash is not None and web_dash is not None:
+                dashboard = CompositeRadarDashboard([primary_dash, web_dash])
+            else:
+                dashboard = primary_dash or web_dash
+
+        if web_dash is not None:
+            web_url = web_dash.url
+            print(
+                f"[hackrf-radar] web UI listening on {web_url} (0 dBm RX-only)",
+                file=sys.stderr,
+                flush=True,
+            )
+            if on_web_ready is not None:
+                on_web_ready(web_url)
 
         frame_period = 1.0 / max(cfg.solver.target_fps, 1.0)
         packets_processed = 0
@@ -493,7 +629,7 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
                 render_times_ms.append(ms)
 
         for ev in event_iter:
-            if stop_requested:
+            if _should_stop():
                 break
 
             packets_processed += 1
@@ -584,7 +720,9 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
         )
         return PipelineRunResult(
             mode=args.mode,
-            ui_backend=resolved_ui if args.ui != "none" else "none",
+            ui_backend=resolved_ui
+            if args.ui != "none"
+            else ("web" if use_web else "none"),
             capture_backend=capture_backend,
             packets_processed=packets_processed,
             frames_rendered=len(render_times_ms)
@@ -594,11 +732,13 @@ def run_pipeline(args: argparse.Namespace) -> PipelineRunResult:
             last_frame=last_frame,
             snapshot_path=snapshot_out,
             recorded_path=recorded_path,
+            web_url=web_url,
             render_times_ms=render_times_ms,
         )
 
     finally:
-        signal.signal(signal.SIGINT, prev_sigint)
+        if is_main_thread and prev_sigint is not None:
+            signal.signal(signal.SIGINT, prev_sigint)
         if record_fh is not None:
             with contextlib.suppress(OSError, ValueError):
                 record_fh.flush()

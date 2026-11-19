@@ -65,20 +65,20 @@ def pyqtgraph_available() -> bool:
 
 
 def select_ui_backend(requested: str = "auto", no_gui: bool = False) -> str:
-    """Resolve ``auto|pyqtgraph|matplotlib|tui|none`` to a concrete UI backend name."""
+    """Resolve ``auto|pyqtgraph|matplotlib|tui|web|none`` to a concrete UI backend name."""
     req = (requested or "auto").strip().lower()
     if req in {"none", "headless"}:
         return "matplotlib"
-    if req in {"pyqtgraph", "matplotlib", "tui"}:
+    if req in {"pyqtgraph", "matplotlib", "tui", "web"}:
         if req == "pyqtgraph" and not pyqtgraph_available():
             raise RuntimeError(
                 "Requested --ui pyqtgraph, but pyqtgraph/Qt is not installed in this Python "
-                "interpreter. Use /usr/bin/python3 or pass --ui matplotlib / --ui tui."
+                "interpreter. Use /usr/bin/python3 or pass --ui matplotlib / --ui tui / --ui web."
             )
         return req
     if req != "auto":
         raise ValueError(
-            f"Unknown UI backend {requested!r}; expected auto, pyqtgraph, matplotlib, or tui."
+            f"Unknown UI backend {requested!r}; expected auto, pyqtgraph, matplotlib, tui, or web."
         )
 
     if no_gui:
@@ -2018,6 +2018,45 @@ class RichTuiRadarDashboard:
             self._live = None
 
 
+class CompositeRadarDashboard:
+    """Forwards live tomography frames to multiple concurrent dashboards (e.g. TUI + Web)."""
+
+    def __init__(self, dashboards: Sequence[Any]) -> None:
+        self._dashboards: list[Any] = [d for d in dashboards if d is not None]
+        if not self._dashboards:
+            raise ValueError("CompositeRadarDashboard requires at least one dashboard.")
+        self._last_render_ms: float = 0.0
+        self._closed: bool = False
+
+    @property
+    def last_render_ms(self) -> float:
+        return self._last_render_ms
+
+    def update(
+        self,
+        frame: Any,
+        ground_truth: Sequence[Mapping[str, Any]] | None = None,
+    ) -> float:
+        if self._closed:
+            return 0.0
+        total_ms = 0.0
+        for dash in self._dashboards:
+            total_ms += float(dash.update(frame, ground_truth=ground_truth) or 0.0)
+        self._last_render_ms = total_ms
+        return total_ms
+
+    def save_snapshot(self, path: str | Path, dpi: int = 120) -> Path:
+        return self._dashboards[0].save_snapshot(path, dpi=dpi)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        for dash in self._dashboards:
+            with contextlib.suppress(*_GUI_BACKEND_ERRORS):
+                dash.close()
+
+
 def create_plotter(
     backend: str = "auto",
     *,
@@ -2028,9 +2067,29 @@ def create_plotter(
     anchor_positions: Mapping[str, tuple[float, float]] | None = None,
     anchor_labels: Mapping[str, str] | None = None,
     show_ground_truth: bool = True,
-) -> MatplotlibRadarDashboard | PyQtGraphRadarDashboard | RichTuiRadarDashboard:
+    web_host: str = "127.0.0.1",
+    web_port: int = 8765,
+    config_summary: Mapping[str, Any] | None = None,
+    control_handler: Any = None,
+    sim_interactive: bool = False,
+) -> Any:
     """Instantiate the requested radar dashboard backend."""
     resolved = select_ui_backend(backend, no_gui=no_gui)
+    if resolved == "web":
+        from .web import WebRadarDashboard
+
+        return WebRadarDashboard(
+            room_width=room_width,
+            room_height=room_height,
+            anchor_positions=anchor_positions,
+            anchor_labels=anchor_labels,
+            show_ground_truth=show_ground_truth,
+            host=web_host,
+            port=web_port,
+            config_summary=config_summary,
+            control_handler=control_handler,
+            sim_interactive=sim_interactive,
+        )
     if resolved == "pyqtgraph":
         return PyQtGraphRadarDashboard(
             room_width=room_width,

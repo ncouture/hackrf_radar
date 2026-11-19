@@ -21,12 +21,14 @@ __all__ = [
     "SUBCARRIER_INDICES",
     "WIFI_CHANNELS_HZ",
     "AutoDiscoverySettings",
+    "CompositeRadarDashboard",
     "HackRFPacketCapture",
     "LinkDiagnostic",
     "MatplotlibRadarDashboard",
     "PacketEvent",
     "PyQtGraphRadarDashboard",
     "RadarConfig",
+    "RealtimeWebServer",
     "RichTuiRadarDashboard",
     "RoomAnchor",
     "RxSettings",
@@ -34,12 +36,16 @@ __all__ = [
     "SyntheticRadarStream",
     "TomographicRadarEngine",
     "TomographyFrame",
+    "TomographyStateHub",
     "TrackedHuman",
+    "WebRadarDashboard",
     "__version__",
     "create_plotter",
     "load_config",
     "save_config",
     "select_ui_backend",
+    "serialize_frame",
+    "serialize_frame_json",
 ]
 
 if TYPE_CHECKING:
@@ -52,6 +58,7 @@ if TYPE_CHECKING:
         SyntheticRadarStream,
     )
     from .plotter import (
+        CompositeRadarDashboard,
         MatplotlibRadarDashboard,
         PyQtGraphRadarDashboard,
         RichTuiRadarDashboard,
@@ -63,6 +70,13 @@ if TYPE_CHECKING:
         TomographicRadarEngine,
         TomographyFrame,
         TrackedHuman,
+    )
+    from .web import (
+        RealtimeWebServer,
+        TomographyStateHub,
+        WebRadarDashboard,
+        serialize_frame,
+        serialize_frame_json,
     )
 
 
@@ -83,11 +97,20 @@ _TOMO_EXPORTS = {
 }
 
 _PLOTTER_EXPORTS = {
+    "CompositeRadarDashboard",
     "MatplotlibRadarDashboard",
     "PyQtGraphRadarDashboard",
     "RichTuiRadarDashboard",
     "create_plotter",
     "select_ui_backend",
+}
+
+_WEB_EXPORTS = {
+    "RealtimeWebServer",
+    "TomographyStateHub",
+    "WebRadarDashboard",
+    "serialize_frame",
+    "serialize_frame_json",
 }
 
 
@@ -104,4 +127,8 @@ def __getattr__(name: str) -> Any:
         from . import plotter
 
         return getattr(plotter, name)
+    if name in _WEB_EXPORTS:
+        from . import web
+
+        return getattr(web, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
