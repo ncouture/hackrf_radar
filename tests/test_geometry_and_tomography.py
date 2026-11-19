@@ -241,3 +241,95 @@ def test_two_walkers_and_sart_and_peer_chord_toggle() -> None:
     sums, _ = ext.extract(now=10.5)
     assert len(sums) == 1
     assert sums[0].chord.is_peer is False
+
+
+@pytest.mark.parametrize(
+    "solver_fn,expected_iters",
+    [
+        (solve_fista_tv, 45),
+        (solve_nnls_regularized, 34),
+        (solve_sart, 45),
+    ],
+)
+def test_solver_convergence_history_recording(solver_fn, expected_iters: int) -> None:
+    geom = RoomGeometry(
+        room_width=6.0,
+        room_height=5.0,
+        grid_shape=(24, 20),
+        rx_pos=(3.0, 0.35),
+        known_tx_positions={
+            "AA:BB:CC:00:00:02": (3.0, 4.75),
+            "AA:BB:CC:00:00:03": (5.6, 4.70),
+            "AA:BB:CC:00:00:06": (0.35, 1.15),
+        },
+    )
+    c1 = geom.get_or_create_chord("AA:BB:CC:00:00:02", "RX", 2437e6)
+    c2 = geom.get_or_create_chord("AA:BB:CC:00:00:06", "AA:BB:CC:00:00:03", 2462e6)
+    assert c1 is not None and c2 is not None
+    w_mat = np.stack([c1.body_weights, c2.body_weights], axis=0)
+
+    zero_hist: list[float] = [99.0]
+    solver_fn(w_mat, np.zeros(2), geom.grid_shape, history_out=zero_hist)
+    assert zero_hist == [0.0]
+
+    hist: list[float] = []
+    solver_fn(w_mat, np.array([1.0, 0.8]), geom.grid_shape, history_out=hist)
+    assert len(hist) == expected_iters
+    assert all(math.isfinite(v) and v >= 0.0 for v in hist)
+    assert hist[-1] < hist[0]
+
+
+def test_engine_per_link_csi_and_runtime_solver_controls() -> None:
+    sim = SyntheticRadarStream(
+        num_humans=1, scenario="single_breathe", seed=42, packet_rate_hz=200.0
+    )
+    eng = TomographicRadarEngine(
+        known_tx_positions=sim.get_tx_positions(), solver_method="fista_tv"
+    )
+    events = list(sim.iter_events(duration_s=1.2))
+    for ev in events[: len(events) // 2]:
+        eng.ingest(ev)
+
+    frame_pre = eng.step()
+    assert len(frame_pre.links) > 0
+    assert all(
+        lnk.csi_amp is not None
+        and lnk.csi_amp.shape == (52,)
+        and np.all(np.isfinite(lnk.csi_amp))
+        and lnk.csi_phase is not None
+        and lnk.csi_phase.shape == (52,)
+        for lnk in frame_pre.links
+    )
+    assert all(lnk.baseline_csi_amp is None for lnk in frame_pre.links)
+    conv_pre = frame_pre.telemetry["solver_convergence"]
+    assert isinstance(conv_pre, list) and len(conv_pre) >= 1
+    assert frame_pre.telemetry["solver_params"]["solver_method"] == "fista_tv"
+
+    eng.calibrate_baseline()
+    for ev in events[len(events) // 2 :]:
+        eng.ingest(ev)
+
+    updated = eng.set_solver_params(solver_method="nnls", lam_tv=0.04, window_s=2.2)
+    assert updated["solver_method"] == "nnls"
+    assert updated["lam_tv"] == pytest.approx(0.04)
+    assert updated["window_s"] == pytest.approx(2.2)
+
+    frame_post = eng.step()
+    assert frame_post.telemetry["solver_method"] == "nnls"
+    assert frame_post.telemetry["solver_params"]["window_s"] == pytest.approx(2.2)
+    assert any(
+        lnk.baseline_csi_amp is not None and lnk.baseline_csi_amp.shape == (52,)
+        for lnk in frame_post.links
+    )
+
+    eng.set_solver_params(solver_method="sart")
+    frame_sart = eng.step()
+    assert frame_sart.telemetry["solver_method"] == "sart"
+    assert len(frame_sart.telemetry["solver_convergence"]) >= 1
+
+    with pytest.raises(ValueError, match="solver_method"):
+        eng.set_solver_params(solver_method="bogus")
+    with pytest.raises(ValueError, match="lam_tv"):
+        eng.set_solver_params(lam_tv=-0.1)
+    with pytest.raises(ValueError, match="window_s"):
+        eng.set_solver_params(window_s=0.05)
