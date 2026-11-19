@@ -1,5 +1,12 @@
 # HackRF passive Wi-Fi tomographic radar
 
+<img src="./public/hackrf-radar.png" width="640">
+
+
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active-brightgreen.svg)](https://github.com/ncouture/hackrf_radar)
+
 `hackrf-radar` is a passive (`0 dBm` receive-only) indoor multi-human sensing system built around a single HackRF One software-defined radio. It captures ambient IEEE 802.11a/g/n traffic across 2.4 GHz and 5 GHz channels without associating to any network, transmitting any RF energy, or decrypting protected payloads. From cleartext `L-STF`/`L-LTF` preambles and MAC headers, the pipeline estimates 2D human presence maps, walking trajectories, and stationary respiratory rates (`12` to `24 BPM`).
 
 ## System architecture
