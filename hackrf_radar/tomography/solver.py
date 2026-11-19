@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -56,6 +57,9 @@ class LinkDiagnostic:
     fcs_error_rate: float = 0.0
     seq_gap_rate: float = 0.0
     tsf_drift_ppm: float | None = None
+    csi_amp: np.ndarray | None = None
+    csi_phase: np.ndarray | None = None
+    baseline_csi_amp: np.ndarray | None = None
 
 
 @dataclass
@@ -150,6 +154,15 @@ def _estimate_lipschitz(w_mat: np.ndarray, lam_l2: float, n_iter: int = 8) -> fl
     return max(norm_val * 1.05, 1e-6)
 
 
+def _isotropic_tv(img: np.ndarray) -> float:
+    """Compute 2D isotropic Total Variation norm sum(hypot(dx, dy)) on a (Ny, Nx) array."""
+    gx = np.zeros_like(img)
+    gy = np.zeros_like(img)
+    gx[:, :-1] = img[:, 1:] - img[:, :-1]
+    gy[:-1, :] = img[1:, :] - img[:-1, :]
+    return float(np.sum(np.hypot(gx, gy)))
+
+
 def solve_fista_tv(
     w_mat: np.ndarray,
     y_vec: np.ndarray,
@@ -159,11 +172,16 @@ def solve_fista_tv(
     lam_l2: float = 0.020,
     lam_tv: float = 0.006,
     max_iter: int = 45,
+    history_out: list[float] | None = None,
 ) -> np.ndarray:
     """Solve non-negative TV + L1/L2 regularized RTI via Nesterov FISTA."""
     nx, ny = grid_shape
     n_vox = nx * ny
+    if history_out is not None:
+        history_out.clear()
     if w_mat.shape[0] == 0 or float(np.max(y_vec)) <= 1e-6:
+        if history_out is not None:
+            history_out.append(0.0)
         return np.zeros((ny, nx), dtype=np.float64)
 
     lip = _estimate_lipschitz(w_mat, lam_l2)
@@ -178,6 +196,15 @@ def solve_fista_tv(
         grad = (w_mat.T @ res) + lam_l2 * v + lam_l1
         z = np.maximum(0.0, v - step * grad)
         x_next = _prox_tv2d_nonneg(z, grid_shape, lam_tv * step, n_inner=3)
+        if history_out is not None:
+            r_x = (w_mat @ x_next) - y_vec
+            cost = (
+                0.5 * float(np.dot(r_x, r_x))
+                + 0.5 * lam_l2 * float(np.dot(x_next, x_next))
+                + lam_l1 * float(np.sum(x_next))
+                + lam_tv * _isotropic_tv(x_next.reshape(ny, nx))
+            )
+            history_out.append(cost)
         t_next = 0.5 * (1.0 + math.sqrt(1.0 + 4.0 * t_par * t_par))
         v = x_next + ((t_par - 1.0) / t_next) * (x_next - x)
         x = x_next
@@ -194,11 +221,16 @@ def solve_nnls_regularized(
     lam_l1: float = 0.004,
     lam_l2: float = 0.025,
     max_iter: int = 34,
+    history_out: list[float] | None = None,
 ) -> np.ndarray:
     """Solve Tikhonov + L1 regularized Non-Negative Least Squares via accelerated PGD."""
     nx, ny = grid_shape
     n_vox = nx * ny
+    if history_out is not None:
+        history_out.clear()
     if w_mat.shape[0] == 0 or float(np.max(y_vec)) <= 1e-6:
+        if history_out is not None:
+            history_out.append(0.0)
         return np.zeros((ny, nx), dtype=np.float64)
 
     lip = _estimate_lipschitz(w_mat, lam_l2)
@@ -210,6 +242,14 @@ def solve_nnls_regularized(
     for _ in range(max_iter):
         grad = w_mat.T @ ((w_mat @ v) - y_vec) + lam_l2 * v + lam_l1
         x_next = np.maximum(0.0, v - step * grad)
+        if history_out is not None:
+            r_x = (w_mat @ x_next) - y_vec
+            cost = (
+                0.5 * float(np.dot(r_x, r_x))
+                + 0.5 * lam_l2 * float(np.dot(x_next, x_next))
+                + lam_l1 * float(np.sum(x_next))
+            )
+            history_out.append(cost)
         t_next = 0.5 * (1.0 + math.sqrt(1.0 + 4.0 * t_par * t_par))
         v = x_next + ((t_par - 1.0) / t_next) * (x_next - x)
         x = x_next
@@ -226,12 +266,17 @@ def solve_sart(
     *,
     relaxation: float = 1.35,
     max_iter: int = 45,
+    history_out: list[float] | None = None,
 ) -> np.ndarray:
     """Solve non-negative Simultaneous Algebraic Reconstruction Technique (SART)."""
     nx, ny = grid_shape
     n_vox = nx * ny
+    if history_out is not None:
+        history_out.clear()
     y_max = float(np.max(y_vec)) if y_vec.size > 0 else 0.0
     if w_mat.shape[0] == 0 or y_max <= 1e-6:
+        if history_out is not None:
+            history_out.append(0.0)
         return np.zeros((ny, nx), dtype=np.float64)
 
     row_sums = np.maximum(np.sum(w_mat, axis=1), 1e-6)
@@ -242,8 +287,12 @@ def solve_sart(
     x = np.zeros(n_vox, dtype=np.float64)
 
     for _ in range(max_iter):
-        corr = w_mat.T @ ((y_vec - (w_mat @ x)) / row_sums)
+        res = y_vec - (w_mat @ x)
+        corr = w_mat.T @ (res / row_sums)
         x = np.maximum(0.0, x + relaxation * (corr / col_sums) - shrink)
+        if history_out is not None:
+            r_x = (w_mat @ x) - y_vec
+            history_out.append(0.5 * float(np.dot(r_x, r_x)))
 
     img = np.maximum(0.0, x.reshape(ny, nx))
     return ndimage.gaussian_filter(img, sigma=0.55)
@@ -420,6 +469,8 @@ class TomographicRadarEngine:
         use_rssi_log_distance: bool = True,
         ref_rssi_1m_dbm: float = -40.0,
         path_loss_exponent: float = 2.4,
+        lam_tv: float = 0.006,
+        lam_l2: float = 0.020,
     ) -> None:
         self.room_width = float(room_width)
         self.room_height = float(room_height)
@@ -428,6 +479,13 @@ class TomographicRadarEngine:
         self.solver_method = str(solver_method).strip().lower()
         if self.solver_method not in {"fista_tv", "nnls", "sart"}:
             raise ValueError(f"Unsupported solver_method: {self.solver_method!r}")
+        self.lam_tv = float(lam_tv)
+        self.lam_l2 = float(lam_l2)
+        if not (0.0 <= self.lam_tv <= 1.0):
+            raise ValueError(f"lam_tv must be in [0.0, 1.0], got {lam_tv}")
+        if not (0.0 <= self.lam_l2 <= 1.0):
+            raise ValueError(f"lam_l2 must be in [0.0, 1.0], got {lam_l2}")
+        self._lock = threading.RLock()
 
         self.geometry = RoomGeometry(
             room_width=self.room_width,
@@ -465,11 +523,68 @@ class TomographicRadarEngine:
 
     def ingest(self, event: PacketEvent) -> None:
         """Ingest one cleartext ``PacketEvent`` into sliding link & CSI buffers."""
-        self.extractor.ingest(event)
+        with self._lock:
+            self.extractor.ingest(event)
 
     def calibrate_baseline(self) -> None:
         """Capture current empty-room link RSSI & CSI averages as reference baseline."""
-        self.extractor.calibrate_baseline()
+        with self._lock:
+            self.extractor.calibrate_baseline()
+
+    def get_solver_params(self) -> dict[str, Any]:
+        """Return a thread-safe snapshot of current runtime solver parameters."""
+        with self._lock:
+            return {
+                "solver_method": self.solver_method,
+                "lam_tv": float(self.lam_tv),
+                "lam_l2": float(self.lam_l2),
+                "window_s": float(self.extractor.window_s),
+                "grid_shape": [self.grid_shape[0], self.grid_shape[1]],
+            }
+
+    def set_solver_params(
+        self,
+        *,
+        solver_method: str | None = None,
+        lam_tv: float | None = None,
+        lam_l2: float | None = None,
+        window_s: float | None = None,
+    ) -> dict[str, Any]:
+        """Validate and atomically update runtime solver parameters."""
+        new_method: str | None = None
+        if solver_method is not None:
+            new_method = str(solver_method).strip().lower()
+            if new_method not in {"fista_tv", "nnls", "sart"}:
+                raise ValueError(f"Unsupported solver_method: {solver_method!r}")
+
+        new_lam_tv: float | None = None
+        if lam_tv is not None:
+            new_lam_tv = float(lam_tv)
+            if not math.isfinite(new_lam_tv) or not (0.0 <= new_lam_tv <= 1.0):
+                raise ValueError(f"lam_tv must be in [0.0, 1.0], got {lam_tv}")
+
+        new_lam_l2: float | None = None
+        if lam_l2 is not None:
+            new_lam_l2 = float(lam_l2)
+            if not math.isfinite(new_lam_l2) or not (0.0 <= new_lam_l2 <= 1.0):
+                raise ValueError(f"lam_l2 must be in [0.0, 1.0], got {lam_l2}")
+
+        new_window: float | None = None
+        if window_s is not None:
+            new_window = float(window_s)
+            if not math.isfinite(new_window) or not (0.2 <= new_window <= 10.0):
+                raise ValueError(f"window_s must be in [0.2, 10.0], got {window_s}")
+
+        with self._lock:
+            if new_method is not None:
+                self.solver_method = new_method
+            if new_lam_tv is not None:
+                self.lam_tv = new_lam_tv
+            if new_lam_l2 is not None:
+                self.lam_l2 = new_lam_l2
+            if new_window is not None:
+                self.extractor.set_window_s(new_window)
+            return self.get_solver_params()
 
     def _build_linear_system(
         self, summaries: list[LinkFeatureSummary]
@@ -742,99 +857,127 @@ class TomographicRadarEngine:
 
     def step(self, now: float | None = None) -> TomographyFrame:
         """Run one full RTI inversion, multi-human Kalman update, & vital-sign step."""
-        step_ts = (
-            self.extractor.latest_timestamp
-            if (now is None and self.extractor.latest_timestamp > 0.0)
-            else (float(now) if now is not None else 0.0)
-        )
-        summaries, psd_db = self.extractor.extract(now=step_ts)
-        w_mat, y_vec, cross_prior = self._build_linear_system(summaries)
+        with self._lock:
+            step_ts = (
+                self.extractor.latest_timestamp
+                if (now is None and self.extractor.latest_timestamp > 0.0)
+                else (float(now) if now is not None else 0.0)
+            )
+            summaries, psd_db = self.extractor.extract(now=step_ts)
+            w_mat, y_vec, cross_prior = self._build_linear_system(summaries)
 
-        # Modulate columns of W by wide-angle intersection consistency prior before solving
-        w_eff = w_mat * cross_prior[None, :]
+            # Modulate columns of W by wide-angle intersection consistency prior before solving
+            w_eff = w_mat * cross_prior[None, :]
+            conv_history: list[float] = []
 
-        if self.solver_method == "fista_tv":
-            raw_map = solve_fista_tv(w_eff, y_vec, self.grid_shape)
-        elif self.solver_method == "nnls":
-            raw_map = solve_nnls_regularized(w_eff, y_vec, self.grid_shape)
-        else:
-            raw_map = solve_sart(w_eff, y_vec, self.grid_shape)
-
-        # Light temporal EMA smoothing to stabilize channel-hopping dwell transitions
-        if (
-            self._smoothed_density is None
-            or self._smoothed_density.shape != raw_map.shape
-        ):
-            self._smoothed_density = raw_map.copy()
-        else:
-            self._smoothed_density = 0.64 * raw_map + 0.36 * self._smoothed_density
-
-        density_map = np.maximum(0.0, self._smoothed_density.copy())
-
-        peaks = self._extract_peaks(density_map)
-        k_tracks = self.tracker.step(peaks, step_ts)
-        self._attribute_breathing(k_tracks, summaries)
-
-        out_tracks: list[TrackedHuman] = []
-        for kt in k_tracks:
-            act = "walking" if kt.smoothed_speed >= 0.14 else "stationary"
-            conf = min(1.0, 0.35 + 0.12 * kt.hits + 0.45 * min(kt.peak_density, 1.0))
-            out_tracks.append(
-                TrackedHuman(
-                    track_id=kt.track_id,
-                    x=float(kt.state[0]),
-                    y=float(kt.state[1]),
-                    vx=float(kt.state[2]),
-                    vy=float(kt.state[3]),
-                    activity=act,
-                    breathing_bpm=kt.breathing_bpm if act == "stationary" else None,
-                    confidence=float(conf),
-                    peak_density=float(kt.peak_density),
+            if self.solver_method == "fista_tv":
+                raw_map = solve_fista_tv(
+                    w_eff,
+                    y_vec,
+                    self.grid_shape,
+                    lam_l2=self.lam_l2,
+                    lam_tv=self.lam_tv,
+                    history_out=conv_history,
                 )
+            elif self.solver_method == "nnls":
+                raw_map = solve_nnls_regularized(
+                    w_eff,
+                    y_vec,
+                    self.grid_shape,
+                    lam_l2=max(self.lam_l2, self.lam_tv),
+                    history_out=conv_history,
+                )
+            else:
+                raw_map = solve_sart(
+                    w_eff, y_vec, self.grid_shape, history_out=conv_history
+                )
+
+            # Light temporal EMA smoothing to stabilize channel-hopping dwell transitions
+            if (
+                self._smoothed_density is None
+                or self._smoothed_density.shape != raw_map.shape
+            ):
+                self._smoothed_density = raw_map.copy()
+            else:
+                self._smoothed_density = 0.64 * raw_map + 0.36 * self._smoothed_density
+
+            density_map = np.maximum(0.0, self._smoothed_density.copy())
+
+            peaks = self._extract_peaks(density_map)
+            k_tracks = self.tracker.step(peaks, step_ts)
+            self._attribute_breathing(k_tracks, summaries)
+
+            out_tracks: list[TrackedHuman] = []
+            for kt in k_tracks:
+                act = "walking" if kt.smoothed_speed >= 0.14 else "stationary"
+                conf = min(
+                    1.0, 0.35 + 0.12 * kt.hits + 0.45 * min(kt.peak_density, 1.0)
+                )
+                out_tracks.append(
+                    TrackedHuman(
+                        track_id=kt.track_id,
+                        x=float(kt.state[0]),
+                        y=float(kt.state[1]),
+                        vx=float(kt.state[2]),
+                        vy=float(kt.state[3]),
+                        activity=act,
+                        breathing_bpm=kt.breathing_bpm if act == "stationary" else None,
+                        confidence=float(conf),
+                        peak_density=float(kt.peak_density),
+                    )
+                )
+
+            out_links: list[LinkDiagnostic] = [
+                LinkDiagnostic(
+                    link_id=s.chord.link_id,
+                    tx_bssid=s.chord.tx_bssid,
+                    rx_id=s.chord.rx_id,
+                    tx_pos=s.chord.tx_pos,
+                    rx_pos=s.chord.rx_pos,
+                    freq_hz=s.chord.freq_hz,
+                    is_peer=s.chord.is_peer,
+                    packet_count=s.packet_count,
+                    rssi_delta_db=s.rssi_delta_db,
+                    csi_turbulence=s.csi_turbulence,
+                    perturbation_score=s.perturbation_score,
+                    breathing_hz=s.breathing_hz,
+                    breathing_bpm=s.breathing_bpm,
+                    breathing_snr_db=s.breathing_snr_db,
+                    fcs_error_rate=s.fcs_error_rate,
+                    seq_gap_rate=s.seq_gap_rate,
+                    tsf_drift_ppm=s.tsf_drift_ppm,
+                    csi_amp=s.csi_amp.copy() if s.csi_amp is not None else None,
+                    csi_phase=s.csi_phase.copy() if s.csi_phase is not None else None,
+                    baseline_csi_amp=(
+                        s.baseline_csi_amp.copy()
+                        if s.baseline_csi_amp is not None
+                        else None
+                    ),
+                )
+                for s in summaries
+            ]
+
+            telemetry: dict[str, Any] = {
+                "packet_rate_hz": self.extractor.packet_rate_hz(step_ts),
+                "mean_tsf_ppm": self.extractor.mean_tsf_ppm(),
+                "solver_method": self.solver_method,
+                "solver_params": self.get_solver_params(),
+                "solver_convergence": conv_history,
+                "active_chords": len(out_links),
+                "bssid_count": len(self.extractor.observed_bssids),
+            }
+
+            return TomographyFrame(
+                timestamp=step_ts,
+                density_map=density_map,
+                grid_x=self.geometry.grid_x.copy(),
+                grid_y=self.geometry.grid_y.copy(),
+                rx_pos=self.rx_pos,
+                tracks=out_tracks,
+                links=out_links,
+                latest_csi_amp=self.extractor.latest_csi_amp.copy(),
+                latest_csi_phase=self.extractor.latest_csi_phase.copy(),
+                psd_freqs_hz=self.extractor.psd_freqs_hz.copy(),
+                psd_power_db=psd_db,
+                telemetry=telemetry,
             )
-
-        out_links: list[LinkDiagnostic] = [
-            LinkDiagnostic(
-                link_id=s.chord.link_id,
-                tx_bssid=s.chord.tx_bssid,
-                rx_id=s.chord.rx_id,
-                tx_pos=s.chord.tx_pos,
-                rx_pos=s.chord.rx_pos,
-                freq_hz=s.chord.freq_hz,
-                is_peer=s.chord.is_peer,
-                packet_count=s.packet_count,
-                rssi_delta_db=s.rssi_delta_db,
-                csi_turbulence=s.csi_turbulence,
-                perturbation_score=s.perturbation_score,
-                breathing_hz=s.breathing_hz,
-                breathing_bpm=s.breathing_bpm,
-                breathing_snr_db=s.breathing_snr_db,
-                fcs_error_rate=s.fcs_error_rate,
-                seq_gap_rate=s.seq_gap_rate,
-                tsf_drift_ppm=s.tsf_drift_ppm,
-            )
-            for s in summaries
-        ]
-
-        telemetry: dict[str, Any] = {
-            "packet_rate_hz": self.extractor.packet_rate_hz(step_ts),
-            "mean_tsf_ppm": self.extractor.mean_tsf_ppm(),
-            "solver_method": self.solver_method,
-            "active_chords": len(out_links),
-            "bssid_count": len(self.extractor.observed_bssids),
-        }
-
-        return TomographyFrame(
-            timestamp=step_ts,
-            density_map=density_map,
-            grid_x=self.geometry.grid_x.copy(),
-            grid_y=self.geometry.grid_y.copy(),
-            rx_pos=self.rx_pos,
-            tracks=out_tracks,
-            links=out_links,
-            latest_csi_amp=self.extractor.latest_csi_amp.copy(),
-            latest_csi_phase=self.extractor.latest_csi_phase.copy(),
-            psd_freqs_hz=self.extractor.psd_freqs_hz.copy(),
-            psd_power_db=psd_db,
-            telemetry=telemetry,
-        )
