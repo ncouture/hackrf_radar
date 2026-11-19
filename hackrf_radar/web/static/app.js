@@ -916,7 +916,7 @@
       ctx.textAlign = 'left';
       ctx.fillText('0.1 Hz', padL, h - 3);
       ctx.textAlign = 'center';
-      ctx.fillText('Resp 0.18–0.45 Hz', (rx0 + rx1) * 0.5, padT + 10);
+      ctx.fillText('Resp 0.18–0.45 Hz', padL + pw * 0.48, h - 3);
       ctx.textAlign = 'right';
       ctx.fillText('25 Hz', padL + pw, h - 3);
       return;
@@ -959,8 +959,8 @@
     ctx.fillStyle = onVar;
     ctx.font = "10px 'Google Sans Code', monospace";
     ctx.textAlign = 'right';
-    ctx.fillText(maxJ.toFixed(1), padL - 4, padT + 7);
-    ctx.fillText(minJ.toFixed(1), padL - 4, padT + ph);
+    ctx.fillText(maxJ.toFixed(2), padL - 4, padT + 7);
+    ctx.fillText(minJ.toFixed(2), padL - 4, padT + ph);
     ctx.textAlign = 'left';
     ctx.fillText('k=1', padL, h - 3);
     ctx.textAlign = 'right';
@@ -992,7 +992,7 @@
         nx +
         '×' +
         ny +
-        ' voxel reconstruction · First Fresnel Zone (Δ < λ/2)';
+        ' voxels · FFZ Δ < λ/2';
     }
 
     // Room target readout
@@ -1103,16 +1103,10 @@
       if (el) el.textContent = val;
     };
     setTxt('tele-k', String(hud.bssid_count != null ? hud.bssid_count : 0));
-    const peerPart = hud.peer_chord_count > 0 ? ' (' + hud.peer_chord_count + ' SIFS)' : '';
+    const peerPart = hud.peer_chord_count > 0 ? ' (' + hud.peer_chord_count + 'p)' : '';
     setTxt('tele-m', String(hud.chord_count != null ? hud.chord_count : 0) + peerPart);
     setTxt('tele-n', String((room.grid_nx || 40) * (room.grid_ny || 34)));
-    setTxt(
-      'tele-rate',
-      Math.round(Number(hud.packet_rate_hz) || 0) +
-        ' pkt/s · ' +
-        Number(frame.server_fps || 0).toFixed(1) +
-        ' fps'
-    );
+    setTxt('tele-rate', Math.round(Number(hud.packet_rate_hz) || 0) + ' pkt/s');
     setTxt('tele-tracks', String(tracks.length));
     setTxt(
       'tele-vital',
@@ -1121,8 +1115,10 @@
 
     const adcEl = document.getElementById('tele-adc');
     if (adcEl) {
-      adcEl.textContent = hud.adc_status || 'OK (0.00%)';
-      adcEl.classList.toggle('tele-val--warn', (Number(hud.adc_clip_max) || 0) >= 0.02);
+      const clipPct = (Number(hud.adc_clip_max) || 0) * 100;
+      const isWarn = (Number(hud.adc_clip_max) || 0) >= 0.02;
+      adcEl.textContent = (isWarn ? 'WARN ' : 'OK ') + clipPct.toFixed(1) + '%';
+      adcEl.classList.toggle('tele-val--warn', isWarn);
     }
     setTxt(
       'tele-fcs',

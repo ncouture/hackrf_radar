@@ -11,11 +11,12 @@
 
 ## System architecture
 
-The codebase is organized into three layers under `hackrf_radar/`:
+The codebase is organized into four layers under `hackrf_radar/`:
 
 * `hackrf_radar/capture/` (`packet_event.py`, `soapy_source.py`, `gr_wifi_bridge.py`, `simulator.py`) manages 20 MSPS 8-bit I/Q acquisition, 2.4/5 GHz channel hopping, cleartext 802.11 OFDM preamble synchronization, 52-subcarrier `L-LTF` channel state information (`CSI`) extraction, MAC frame attribution, and synthetic physics simulation.
 * `hackrf_radar/tomography/` (`geometry.py`, `features.py`, `solver.py`) computes First Fresnel Zone elliptical sensitivity weights ($\Delta_{ij} < \lambda/2$), extracts link-level RSSI perturbation, sanitized CSI turbulence, and respiratory power spectral density (`0.1` to `25 Hz`), solves non-negative total-variation regularized Radio Tomographic Imaging (`fista_tv`, `nnls`, `sart`), and runs multi-target Kalman tracking.
-* `hackrf_radar/config.py`, `hackrf_radar/plotter.py`, `hackrf_radar/cli.py`, and `run_radar.py` provide passive front-end safety locks, JSON room configuration, a 20+ FPS 4-panel dashboard (`pyqtgraph`, blitted `matplotlib`, and `rich` ANSI Truecolor TUI), JSONL session recording/replay, and PNG snapshot export.
+* `hackrf_radar/web/` (`serializer.py`, `server.py`, `static/`) provides a Python standard-library HTTP and Server-Sent Events (`SSE`) server with a browser UI for live 2D tomography heatmaps, 52-subcarrier `L-LTF` CSI inspection, solver convergence, vital-sign PSD plots, and runtime solver controls.
+* `hackrf_radar/config.py`, `hackrf_radar/plotter.py`, `hackrf_radar/cli.py`, and `run_radar.py` provide passive front-end safety locks, JSON room configuration, a 20+ FPS dashboard (`pyqtgraph`, blitted `matplotlib`, `rich` ANSI Truecolor TUI, and `web`), JSONL session recording/replay, and PNG snapshot export.
 
 Because a single HackRF receiver forms a radial fan of chords toward room transmitters, the capture layer also tracks Short Interframe Space (`SIFS`, `10 us` at 2.4 GHz and `16 us` at 5 GHz) control exchanges (`RTS`/`CTS`, `Data`/`ACK`, `BlockAck`). Attributing 1-address `CTS` and `ACK` frames to the preceding frame's receiver address adds cross-room peer chords that suppress single-receiver fan intersection ghosts during multi-human inversion.
 
@@ -49,11 +50,30 @@ Tomographic spatial accuracy depends on knowing the `(x, y)` coordinates (in roo
 4. Keep `"auto_discovery": {"enabled": true}` in the JSON file so uncalibrated BSSIDs observed on air are placed automatically along the room perimeter using log-distance RSSI ranging and chord consistency.
 5. For stationary rooms, pass `--calibrate-s 3.0` when nobody is inside the room so the engine records a clean empty-room baseline before tracking occupancy.
 
+## Realtime web interface
+
+`hackrf-radar` includes a browser interface served directly from Python's standard library (`http.server.ThreadingHTTPServer` and `text/event-stream`), requiring no extra web dependencies. Pass `--ui web` to run the browser dashboard standalone, or add `--web` alongside `tui`, `matplotlib`, or `pyqtgraph` to mirror frames to both displays.
+
+The page displays the physical room voxel attenuation map with First Fresnel Zone ellipses, direct and SIFS peer chords, Kalman-tracked human positions and breathing rates, per-chord 52-subcarrier `L-LTF` CSI amplitude and sanitized phase, solver objective convergence (`J(x_k)`), `0.1` to `25 Hz` respiratory PSD, and live RF HUD metrics. Clicking any chord pins its Fresnel zone and subcarrier CSI profile; controls in the lower deck switch solvers (`fista_tv`, `nnls`, `sart`), tune regularization `lambda` and sliding window duration, trigger empty-room baseline calibration, pause rendering, or drag simulated targets in `--mode sim`.
+
+HTTP endpoints bind to loopback (`127.0.0.1:8765`) by default and keep passive `0 dBm` RX-only locks enforced:
+
+* `GET /` serves the Luminous light/dark web application with a strict Content Security Policy (no inline scripts).
+* `GET /api/stream` streams realtime `config` and `frame` events over Server-Sent Events with drop-oldest backpressure so slow browser tabs do not stall capture.
+* `GET /api/frame`, `GET /api/config`, and `GET /api/health` return the latest serialized `TomographyFrame`, room settings, and server health as JSON.
+* `POST /api/control` accepts same-origin JSON updates for solver method, regularization, observation window, baseline calibration, and simulation target placement while rejecting any `amp_enable`, `bias_tee_enable`, or transmit keys.
+
 ## Command-line usage
 
-Run the multi-human simulator (1, 2, or 3+ targets) with interactive GUI or headless PNG snapshot export:
+Run the multi-human simulator (1, 2, or 3+ targets) with the realtime web interface, interactive GUI, or headless PNG snapshot export:
 
 ```bash
+# Realtime browser tomography UI at http://127.0.0.1:8765/ (streams continuously until Ctrl+C)
+python3 run_radar.py --mode sim --humans 2 --scenario walk_and_breathe --ui web
+
+# Concurrent Rich TUI + realtime web UI on a custom port
+python3 run_radar.py --mode sim --humans 2 --ui tui --web --web-port 8080
+
 # 2-human walk + stationary breathing simulation (auto-selects pyqtgraph or matplotlib)
 python3 run_radar.py --mode sim --humans 2 --scenario walk_and_breathe
 
@@ -70,8 +90,8 @@ python3 run_radar.py --mode sim --humans 2 --ui tui --duration 5.0
 Capture live ambient Wi-Fi passively from an attached HackRF One (`0 dBm` RX-only, `AMP` off) and record `PacketEvent` telemetry for offline replay:
 
 ```bash
-# Live passive HackRF capture across channels 1, 6, and 11
-/usr/bin/python3 run_radar.py --mode live --config configs/example_room.json --channels 1 6 11 --lna-db 24 --vga-db 20 --record session.jsonl
+# Live passive HackRF capture across channels 1, 6, and 11 with realtime browser UI
+/usr/bin/python3 run_radar.py --mode live --config configs/example_room.json --channels 1 6 11 --lna-db 24 --vga-db 20 --ui web --record session.jsonl
 
 # Replay a recorded JSONL session, Radiotap PCAP, or raw CS8/CF32 I/Q capture
 python3 run_radar.py --mode replay --input session.jsonl --ui matplotlib --save-snapshot replay_check.png
