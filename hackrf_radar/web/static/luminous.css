@@ -1,0 +1,629 @@
+/* luminous.css — Luminous Design System tokens & components for HackRF Passive Wi-Fi RTI */
+
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:ital,wght@0,300..700;1,300..700&family=Google+Sans+Code:ital,wght,MONO@0,300..700,0..1;1,300..700,0..1&display=swap');
+
+:root {
+  color-scheme: light dark;
+  --ff-sans: 'Google Sans Flex', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ff-mono: 'Google Sans Code', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --lumi-sys-spacing--xxs: 2px;
+  --lumi-sys-spacing--xs: 4px;
+  --lumi-sys-spacing--s: 8px;
+  --lumi-sys-spacing--m: 12px;
+  --lumi-sys-spacing--l: 16px;
+  --lumi-sys-spacing--xl: 20px;
+  --lumi-sys-spacing--xxl: 24px;
+  --lumi-sys-spacing--3xl: 28px;
+  --lumi-sys-spacing--4xl: 36px;
+
+  --lumi-sys-shape--none: 0px;
+  --lumi-sys-shape--extra-small: 4px;
+  --lumi-sys-shape--small: 8px;
+  --lumi-sys-shape--medium: 12px;
+  --lumi-sys-shape--large: 16px;
+  --lumi-sys-shape--large-increased: 20px;
+  --lumi-sys-shape--large-max: 24px;
+  --lumi-sys-shape--xl: 28px;
+  --lumi-sys-shape--xl-max: 36px;
+  --lumi-sys-shape--full: 999px;
+
+  --lumi-sys-elevation--level1: 0 2px 18px 0 rgba(0, 0, 0, 0.05);
+  --lumi-sys-elevation--level2: 0 4px 24px 0 rgba(0, 0, 0, 0.11);
+
+  --lumi-sys-color--surface: #fdfcfc;
+  --lumi-sys-color--surface-dim: #f2f0f0;
+  --lumi-sys-color--surface-bright: #ffffff;
+  --lumi-sys-color--surface-background: #f5f4f4;
+  --lumi-sys-color--surface-accent: #9dd2ff;
+  --lumi-sys-color--surface-container: #f2f0f0;
+  --lumi-sys-color--surface-container-high: #e6e6e6;
+  --lumi-sys-color--surface-translucent: rgba(255, 255, 255, 0.88);
+  --lumi-sys-color--on-surface: #000000;
+  --lumi-sys-color--on-surface-default: #000000;
+  --lumi-sys-color--on-surface-variant: rgba(0, 0, 0, 0.62);
+  --lumi-sys-color--on-surface-de-emphasis: rgba(0, 0, 0, 0.62);
+  --lumi-sys-color--on-surface-low: rgba(0, 0, 0, 0.08);
+  --lumi-sys-color--positive: #008052;
+  --lumi-sys-color--positive-container: #daf9d4;
+  --lumi-sys-color--on-positive-container: #006b44;
+  --lumi-sys-color--error: #de2d29;
+  --lumi-sys-color--error-container: #ffdeec;
+  --lumi-sys-color--on-error-container: #b51d1a;
+  --lumi-sys-color--accent: #9dd2ff;
+  --lumi-sys-color--accent-container: #dcf1ff;
+  --lumi-sys-color--accent-fixed: #3186ff;
+  --lumi-sys-color--primary: #3186ff;
+  --lumi-sys-color--on-primary: #ffffff;
+  --lumi-sys-color--outline: #727676;
+  --lumi-sys-color--stroke-default: #e3e3e3;
+
+  --lumi-sys-color--chart-series-1: #2575fc;
+  --lumi-sys-color--chart-series-2: #5b6e9e;
+  --lumi-sys-color--chart-series-3: #228a49;
+  --lumi-sys-color--chart-series-4: #62991b;
+  --lumi-sys-color--chart-series-5: #1e564d;
+  --lumi-sys-color--chart-series-6: #526a45;
+  --lumi-sys-color--chart-series-7: #2780c4;
+  --lumi-sys-color--chart-series-8: #997112;
+  --lumi-sys-color--chart-series-9: #705ec2;
+  --lumi-sys-color--chart-series-10: #c84288;
+
+  --lumi-scrollbar-thumb: rgba(0, 0, 0, 0.24);
+  --lumi-scrollbar-track: transparent;
+}
+
+:root[data-theme="light"],
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"],
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+  --lumi-sys-elevation--level1: 0 2px 20px 0 rgba(0, 0, 0, 0.30);
+  --lumi-sys-elevation--level2: 0 4px 24px 0 rgba(0, 0, 0, 0.44);
+
+  --lumi-sys-color--surface: #0f0f0f;
+  --lumi-sys-color--surface-dim: #141414;
+  --lumi-sys-color--surface-bright: #1c1c1c;
+  --lumi-sys-color--surface-background: #0a0a0c;
+  --lumi-sys-color--surface-accent: #14204f;
+  --lumi-sys-color--surface-container: #141414;
+  --lumi-sys-color--surface-container-high: #22242a;
+  --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
+  --lumi-sys-color--on-surface: #e4e4e7;
+  --lumi-sys-color--on-surface-default: #e4e4e7;
+  --lumi-sys-color--on-surface-variant: rgba(255, 255, 255, 0.62);
+  --lumi-sys-color--on-surface-de-emphasis: rgba(255, 255, 255, 0.62);
+  --lumi-sys-color--on-surface-low: rgba(255, 255, 255, 0.12);
+  --lumi-sys-color--positive: #0ebc5f;
+  --lumi-sys-color--positive-container: #002220;
+  --lumi-sys-color--on-positive-container: #50e389;
+  --lumi-sys-color--error: #ff4c45;
+  --lumi-sys-color--error-container: #3c0202;
+  --lumi-sys-color--on-error-container: #ff7b76;
+  --lumi-sys-color--accent: #1f3b9b;
+  --lumi-sys-color--accent-container: #192967;
+  --lumi-sys-color--accent-fixed: #3186ff;
+  --lumi-sys-color--primary: #9dd2ff;
+  --lumi-sys-color--on-primary: #192967;
+  --lumi-sys-color--outline: #9a9b9c;
+  --lumi-sys-color--stroke-default: #2d2f38;
+
+  --lumi-sys-color--chart-series-1: #9dd2ff;
+  --lumi-sys-color--chart-series-2: #96a7d6;
+  --lumi-sys-color--chart-series-3: #50e389;
+  --lumi-sys-color--chart-series-4: #c8f585;
+  --lumi-sys-color--chart-series-5: #f5f2e6;
+  --lumi-sys-color--chart-series-6: #dcd8c0;
+  --lumi-sys-color--chart-series-7: #82c7ff;
+  --lumi-sys-color--chart-series-8: #f5d77f;
+  --lumi-sys-color--chart-series-9: #d9ceff;
+  --lumi-sys-color--chart-series-10: #ffa6d7;
+
+  --lumi-scrollbar-thumb: rgba(255, 255, 255, 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(:has(> head > meta[name="color-scheme"][content="light"])) {
+    color-scheme: dark;
+    --lumi-sys-elevation--level1: 0 2px 20px 0 rgba(0, 0, 0, 0.30);
+    --lumi-sys-elevation--level2: 0 4px 24px 0 rgba(0, 0, 0, 0.44);
+
+    --lumi-sys-color--surface: #0f0f0f;
+    --lumi-sys-color--surface-dim: #141414;
+    --lumi-sys-color--surface-bright: #1c1c1c;
+    --lumi-sys-color--surface-background: #0a0a0c;
+    --lumi-sys-color--surface-accent: #14204f;
+    --lumi-sys-color--surface-container: #141414;
+    --lumi-sys-color--surface-container-high: #22242a;
+    --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
+    --lumi-sys-color--on-surface: #e4e4e7;
+    --lumi-sys-color--on-surface-default: #e4e4e7;
+    --lumi-sys-color--on-surface-variant: rgba(255, 255, 255, 0.62);
+    --lumi-sys-color--on-surface-de-emphasis: rgba(255, 255, 255, 0.62);
+    --lumi-sys-color--on-surface-low: rgba(255, 255, 255, 0.12);
+    --lumi-sys-color--positive: #0ebc5f;
+    --lumi-sys-color--positive-container: #002220;
+    --lumi-sys-color--on-positive-container: #50e389;
+    --lumi-sys-color--error: #ff4c45;
+    --lumi-sys-color--error-container: #3c0202;
+    --lumi-sys-color--on-error-container: #ff7b76;
+    --lumi-sys-color--accent: #1f3b9b;
+    --lumi-sys-color--accent-container: #192967;
+    --lumi-sys-color--accent-fixed: #3186ff;
+    --lumi-sys-color--primary: #9dd2ff;
+    --lumi-sys-color--on-primary: #192967;
+    --lumi-sys-color--outline: #9a9b9c;
+    --lumi-sys-color--stroke-default: #2d2f38;
+
+    --lumi-sys-color--chart-series-1: #9dd2ff;
+    --lumi-sys-color--chart-series-2: #96a7d6;
+    --lumi-sys-color--chart-series-3: #50e389;
+    --lumi-sys-color--chart-series-4: #c8f585;
+    --lumi-sys-color--chart-series-5: #f5f2e6;
+    --lumi-sys-color--chart-series-6: #dcd8c0;
+    --lumi-sys-color--chart-series-7: #82c7ff;
+    --lumi-sys-color--chart-series-8: #f5d77f;
+    --lumi-sys-color--chart-series-9: #d9ceff;
+    --lumi-sys-color--chart-series-10: #ffa6d7;
+
+    --lumi-scrollbar-thumb: rgba(255, 255, 255, 0.24);
+  }
+}
+
+/* Short aliases bridging canonical Luminous tokens */
+:root {
+  --surface: var(--lumi-sys-color--surface);
+  --surface-dim: var(--lumi-sys-color--surface-dim);
+  --surface-bright: var(--lumi-sys-color--surface-bright);
+  --surface-background: var(--lumi-sys-color--surface-background);
+  --surface-container: var(--lumi-sys-color--surface-container);
+  --surface-container-high: var(--lumi-sys-color--surface-container-high);
+  --surface-translucent: var(--lumi-sys-color--surface-translucent);
+  --on-surface: var(--lumi-sys-color--on-surface);
+  --on-surface-variant: var(--lumi-sys-color--on-surface-variant);
+  --on-surface-low: var(--lumi-sys-color--on-surface-low);
+  --primary: var(--lumi-sys-color--primary);
+  --accent: var(--lumi-sys-color--accent);
+  --accent-container: var(--lumi-sys-color--accent-container);
+  --accent-fixed: var(--lumi-sys-color--accent-fixed);
+  --positive: var(--lumi-sys-color--positive);
+  --positive-container: var(--lumi-sys-color--positive-container);
+  --on-positive-container: var(--lumi-sys-color--on-positive-container);
+  --error: var(--lumi-sys-color--error);
+  --error-container: var(--lumi-sys-color--error-container);
+  --on-error-container: var(--lumi-sys-color--on-error-container);
+  --outline: var(--lumi-sys-color--outline);
+  --stroke-default: var(--lumi-sys-color--stroke-default);
+  --chart-1: var(--lumi-sys-color--chart-series-1);
+  --chart-2: var(--lumi-sys-color--chart-series-2);
+  --chart-3: var(--lumi-sys-color--chart-series-3);
+  --chart-4: var(--lumi-sys-color--chart-series-4);
+  --chart-5: var(--lumi-sys-color--chart-series-5);
+  --chart-6: var(--lumi-sys-color--chart-series-6);
+  --chart-7: var(--lumi-sys-color--chart-series-7);
+  --chart-8: var(--lumi-sys-color--chart-series-8);
+  --chart-9: var(--lumi-sys-color--chart-series-9);
+  --chart-10: var(--lumi-sys-color--chart-series-10);
+  --spacing-xs: var(--lumi-sys-spacing--xs);
+  --spacing-s: var(--lumi-sys-spacing--s);
+  --spacing-m: var(--lumi-sys-spacing--m);
+  --spacing-l: var(--lumi-sys-spacing--l);
+  --spacing-xl: var(--lumi-sys-spacing--xl);
+  --r-container: var(--lumi-sys-shape--xl-max);
+  --r-xl: var(--lumi-sys-shape--xl);
+  --r-l: var(--lumi-sys-shape--large-max);
+  --r-m: var(--lumi-sys-shape--large);
+  --r-s: var(--lumi-sys-shape--small);
+  --r-full: var(--lumi-sys-shape--full);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  accent-color: var(--accent-fixed);
+  scrollbar-width: thin;
+  scrollbar-color: var(--lumi-scrollbar-thumb) var(--lumi-scrollbar-track);
+}
+
+@supports not (scrollbar-color: auto) {
+  html, * {
+    scrollbar-width: auto;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--lumi-scrollbar-thumb);
+    border-radius: 999px;
+  }
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--surface-background);
+  color: var(--on-surface);
+  font-family: var(--ff-sans);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Typography scale */
+.lumi-headline-m {
+  font-family: var(--ff-sans);
+  font-size: 1.5rem;
+  line-height: 1.85rem;
+  font-weight: 420;
+  font-variation-settings: "wght" 420, "wdth" 100, "opsz" 24, "ROND" 20;
+}
+
+.lumi-body-m {
+  font-family: var(--ff-sans);
+  font-size: 0.9375rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  font-variation-settings: "wght" 400, "wdth" 94, "opsz" 15;
+}
+
+.lumi-body-m-emphasized {
+  font-family: var(--ff-sans);
+  font-size: 0.9375rem;
+  line-height: 1.25rem;
+  font-weight: 540;
+  font-variation-settings: "wght" 540, "wdth" 94, "opsz" 15;
+  font-variant-numeric: tabular-nums;
+}
+
+.lumi-body-s {
+  font-family: var(--ff-sans);
+  font-size: 0.8125rem;
+  line-height: 1.1rem;
+  font-weight: 400;
+  font-variation-settings: "wght" 400, "wdth" 94, "opsz" 13;
+}
+
+.lumi-code {
+  font-family: var(--ff-mono);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons */
+button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 16px;
+  font-family: var(--ff-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--on-surface);
+  background-color: var(--surface-bright);
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background-color: var(--surface-container-high);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lumi-btn {
+  min-height: 38px;
+  padding: 0 18px;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.lumi-btn--small {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.lumi-btn--primary {
+  background-color: var(--accent-container);
+  color: var(--on-surface);
+  border-color: var(--primary);
+}
+
+.lumi-btn--primary:hover:not(:disabled) {
+  background-color: var(--accent);
+}
+
+/* Segmented controls */
+.lumi-segmented-group {
+  display: inline-flex;
+  background-color: var(--surface);
+  border: 1px solid var(--stroke-default);
+  padding: 3px;
+  border-radius: var(--r-full);
+  gap: 3px;
+}
+
+.lumi-segmented-btn {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background-color: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+.lumi-segmented-btn:hover:not(.is-active) {
+  color: var(--on-surface);
+  background-color: var(--on-surface-low);
+}
+
+.lumi-segmented-btn.is-active,
+.lumi-segmented-btn[aria-selected="true"] {
+  background-color: var(--accent-container);
+  color: var(--on-surface);
+  border-color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--lumi-sys-elevation--level1);
+}
+
+/* Switches */
+.lumi-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-s);
+  cursor: pointer;
+  color: var(--on-surface);
+  user-select: none;
+  min-height: 36px;
+}
+
+.lumi-switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.lumi-switch__track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 48px;
+  height: 28px;
+  background-color: var(--surface);
+  border: 2px solid var(--stroke-default);
+  border-radius: var(--r-full);
+  transition: background-color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.lumi-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--on-surface-variant);
+  transition: left 0.2s ease, width 0.2s ease, height 0.2s ease, background-color 0.2s ease;
+}
+
+.lumi-switch input[type="checkbox"]:checked + .lumi-switch__track {
+  background-color: var(--accent-fixed);
+  border-color: transparent;
+}
+
+.lumi-switch input[type="checkbox"]:checked + .lumi-switch__track::after {
+  left: 22px;
+  width: 20px;
+  height: 20px;
+  background-color: #ffffff;
+}
+
+/* Sliders */
+.lumi-slider-label {
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lumi-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: calc(100% + 28px);
+  margin-left: -14px;
+  margin-right: -14px;
+  height: 36px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lumi-slider:focus {
+  outline: none;
+}
+
+.lumi-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  --thumb-center: calc(14px + (100% - 28px) * (var(--progress, 50%) / 100%));
+  --active-end: calc(var(--thumb-center) - 8px + (var(--progress, 50%) / 100%) * 6px);
+  background-image:
+    radial-gradient(circle at calc(100% - 18px) center, var(--on-surface-variant) 2px, transparent 2.5px),
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent 14px,
+      var(--on-surface) 14px,
+      var(--on-surface) var(--active-end),
+      transparent var(--active-end),
+      transparent calc(var(--thumb-center) + 8px),
+      var(--stroke-default) calc(var(--thumb-center) + 8px),
+      var(--stroke-default) calc(100% - 16px),
+      transparent calc(100% - 16px),
+      transparent 100%
+    );
+  border-radius: var(--r-full);
+}
+
+.lumi-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 32 32'%3E%3Crect x='14' y='6' width='4' height='20' rx='2' fill='%23000000'/%3E%3C/svg%3E");
+  background-size: 30px 30px;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-top: -13px;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .lumi-slider::-webkit-slider-thumb,
+:root:has(> head > meta[name="color-scheme"][content="dark"]) .lumi-slider::-webkit-slider-thumb {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 32 32'%3E%3Crect x='14' y='6' width='4' height='20' rx='2' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(:has(> head > meta[name="color-scheme"][content="light"])) .lumi-slider::-webkit-slider-thumb {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 32 32'%3E%3Crect x='14' y='6' width='4' height='20' rx='2' fill='%23ffffff'/%3E%3C/svg%3E");
+  }
+}
+
+.lumi-slider::-moz-range-track {
+  height: 4px;
+  background: var(--stroke-default);
+  border-radius: var(--r-full);
+}
+
+.lumi-slider::-moz-range-thumb {
+  width: 8px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: var(--on-surface);
+}
+
+.lumi-slider-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  height: 32px;
+  padding: 0 10px;
+  background-color: var(--surface);
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--r-s);
+  color: var(--on-surface);
+  flex-shrink: 0;
+}
+
+/* Focus rings */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.lumi-switch input[type="checkbox"]:focus-visible + .lumi-switch__track {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.lumi-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* High contrast mode (Windows Forced Colors) */
+@media (forced-colors: active) {
+  button,
+  .lumi-btn,
+  .lumi-segmented-btn,
+  .status-pill,
+  .safety-pill {
+    border: 1px solid ButtonBorder;
+  }
+
+  .lumi-segmented-btn.is-active,
+  .lumi-segmented-btn[aria-selected="true"] {
+    forced-color-adjust: none;
+    background-color: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .lumi-switch__track {
+    forced-color-adjust: none;
+    background-color: Canvas;
+    border: 2px solid ButtonBorder;
+  }
+
+  .lumi-switch__track::after {
+    background-color: ButtonText;
+  }
+
+  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track {
+    background-color: Highlight;
+    border-color: Highlight;
+  }
+
+  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track::after {
+    background-color: HighlightText;
+  }
+
+  .lumi-slider {
+    forced-color-adjust: none;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .lumi-slider::-webkit-slider-runnable-track {
+    background-image: none;
+    background-color: Canvas;
+    border: 1px solid ButtonBorder;
+    height: 6px;
+  }
+
+  .lumi-slider::-webkit-slider-thumb {
+    background-image: none;
+    background-color: ButtonText;
+    border: 2px solid Canvas;
+    outline: 2px solid ButtonBorder;
+    width: 18px;
+    height: 18px;
+    margin-top: -7px;
+  }
+}
