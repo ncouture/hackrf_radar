@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>HackRF Passive Wi-Fi Tomographic Imaging</title>
+  <script src="/static/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/luminous.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link visually-hidden">Skip to tomography dashboard</a>
+  <div class="widget-container">
+    <div class="rti-shell">
+      <header class="header-row" id="header-zone">
+        <div class="header-titles">
+          <h1 class="lumi-headline-m">Wi-Fi Radio Tomographic Imaging</h1>
+          <p class="lumi-body-m" id="subtitle-text">2.4/5 GHz SIFS peer mesh · First Fresnel Zone weights (Δ &lt; λ/2) · Realtime voxel reconstruction</p>
+        </div>
+        <div class="header-badges">
+          <span class="safety-pill lumi-body-s" id="safety-pill">0 dBm RX-ONLY · AMP OFF</span>
+          <span class="status-pill lumi-body-s" id="conn-pill" data-state="connecting">
+            <span class="status-indicator" aria-hidden="true"></span>
+            <span id="conn-text">Connecting…</span>
+          </span>
+          <button type="button" class="theme-toggle lumi-btn lumi-btn--small" id="btn-theme" aria-label="Switch color theme">
+            <span id="theme-label">Dark mode</span>
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content" tabindex="-1">
+        <div class="main-grid">
+          <!-- Left: Physical Room & Realtime Voxel Reconstruction -->
+          <section class="panel-surface" id="room-zone" aria-labelledby="room-heading">
+            <div class="panel-head">
+              <h2 class="lumi-body-m-emphasized" id="room-heading">Room &amp; Attenuation Grid</h2>
+              <span class="lumi-body-s meta-pill" id="target-readout">Waiting for stream…</span>
+            </div>
+
+            <div class="canvas-wrap-room">
+              <div class="canvas-inner">
+                <canvas
+                  id="roomCanvas"
+                  tabindex="0"
+                  role="application"
+                  aria-roledescription="interactive RF tomography room"
+                  aria-label="Realtime room tomography map. Click any peer chord to inspect its First Fresnel Zone ellipse and 52-subcarrier CSI. Use Left and Right arrow keys to cycle chords and Enter to pin."
+                ></canvas>
+              </div>
+            </div>
+
+            <div class="legend-strip" aria-hidden="true">
+              <div class="legend-items">
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c8"></span>Obstructed chord</span>
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c1"></span>1st Fresnel ellipse</span>
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c3"></span>HackRF RX &amp; tracks</span>
+              </div>
+              <span class="lumi-body-s meta-pill" id="room-hint">Click chord to inspect</span>
+            </div>
+
+            <div class="tracks-strip" id="tracks-strip" aria-label="Tracked humans summary">
+              <span class="track-chip track-chip--empty lumi-body-s">No active human tracks</span>
+            </div>
+          </section>
+
+          <!-- Right: Live 52-Subcarrier L-LTF CSI + Solver Convergence / Vital PSD & Telemetry -->
+          <div class="right-stack">
+            <section class="subpanel-surface" id="csi-zone" aria-labelledby="csi-heading">
+              <div class="panel-head">
+                <h2 class="lumi-body-m-emphasized" id="csi-heading">52-Subcarrier L-LTF CSI</h2>
+                <span class="lumi-body-s meta-pill" id="chord-readout">Awaiting link CSI…</span>
+              </div>
+
+              <div class="canvas-wrap-csi">
+                <div class="canvas-inner">
+                  <canvas
+                    id="csiCanvas"
+                    role="img"
+                    aria-label="52-subcarrier 20 MHz L-LTF CSI amplitude and sanitized phase profile from subcarrier k equals minus 26 to plus 26."
+                  ></canvas>
+                </div>
+              </div>
+
+              <div class="legend-items" aria-hidden="true">
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c2"></span>Empty-room baseline</span>
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c1"></span>Measured |H_k| (dB)</span>
+                <span class="legend-item lumi-body-s"><span class="swatch-dot swatch-c10"></span>Sanitized ∠H_k</span>
+              </div>
+            </section>
+
+            <section class="subpanel-surface" id="conv-zone" aria-labelledby="solver-title">
+              <div class="panel-head">
+                <h2 class="lumi-body-m-emphasized" id="solver-title">FISTA-TV Convergence</h2>
+                <div class="panel-head-right">
+                  <span class="lumi-body-s meta-pill" id="obj-readout">Cost J(x) = —</span>
+                  <div class="lumi-segmented-group mini-tabs" role="tablist" aria-label="Bottom-right plot view">
+                    <button type="button" class="lumi-segmented-btn is-active" id="tab-conv" data-plot="convergence" role="tab" aria-selected="true" tabindex="0">Cost J(x)</button>
+                    <button type="button" class="lumi-segmented-btn" id="tab-psd" data-plot="psd" role="tab" aria-selected="false" tabindex="-1">Vital PSD</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="canvas-wrap-conv">
+                <div class="canvas-inner">
+                  <canvas
+                    id="convCanvas"
+                    role="img"
+                    aria-label="Tomographic solver convergence cost curve and 0.1 to 25 Hz respiratory vital-sign power spectral density."
+                  ></canvas>
+                </div>
+              </div>
+
+              <div class="telemetry-grid">
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Nodes (K)</span>
+                  <span class="lumi-code tele-val" id="tele-k">0</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Chords (M)</span>
+                  <span class="lumi-code tele-val" id="tele-m">0</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Voxels (N)</span>
+                  <span class="lumi-code tele-val" id="tele-n">1360</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Rate / FPS</span>
+                  <span class="lumi-code tele-val" id="tele-rate">0 Hz</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Tracked</span>
+                  <span class="lumi-code tele-val" id="tele-tracks">0</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">Vital Peak</span>
+                  <span class="lumi-code tele-val" id="tele-vital">none</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">ADC Clip</span>
+                  <span class="lumi-code tele-val" id="tele-adc">OK (0.00%)</span>
+                </div>
+                <div class="tele-cell">
+                  <span class="lumi-body-s tele-label">FCS / Gaps</span>
+                  <span class="lumi-code tele-val" id="tele-fcs">0.0% · 0</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Control Deck -->
+        <section class="control-deck" aria-label="Tomography solver and display controls">
+          <div class="sliders-grid">
+            <div class="slider-block">
+              <div class="slider-top">
+                <label class="lumi-slider-label lumi-body-m" for="slider-lambda">Regularization (λ)</label>
+                <div class="lumi-slider-value lumi-code" id="slider-lambda-val">0.006</div>
+              </div>
+              <input
+                type="range"
+                id="slider-lambda"
+                class="lumi-slider"
+                min="0.001"
+                max="0.150"
+                step="0.001"
+                value="0.006"
+              >
+            </div>
+
+            <div class="slider-block">
+              <div class="slider-top">
+                <label class="lumi-slider-label lumi-body-m" for="slider-window">Observation Window (s)</label>
+                <div class="lumi-slider-value lumi-code" id="slider-window-val">1.5 s</div>
+              </div>
+              <input
+                type="range"
+                id="slider-window"
+                class="lumi-slider"
+                min="0.4"
+                max="4.0"
+                step="0.1"
+                value="1.5"
+              >
+            </div>
+          </div>
+
+          <div class="controls-bottom">
+            <div class="solver-group">
+              <span class="lumi-body-s meta-pill" id="solver-label">Solver:</span>
+              <div class="lumi-segmented-group" role="tablist" aria-labelledby="solver-label">
+                <button type="button" class="lumi-segmented-btn is-active" id="btn-fista" data-solver="fista_tv" role="tab" aria-selected="true" tabindex="0">FISTA-TV</button>
+                <button type="button" class="lumi-segmented-btn" id="btn-nnls" data-solver="nnls" role="tab" aria-selected="false" tabindex="-1">NNLS</button>
+                <button type="button" class="lumi-segmented-btn" id="btn-sart" data-solver="sart" role="tab" aria-selected="false" tabindex="-1">SART</button>
+              </div>
+            </div>
+
+            <div class="actions-group">
+              <label class="lumi-switch" for="switch-sifs">
+                <input type="checkbox" id="switch-sifs">
+                <span class="lumi-switch__track" aria-hidden="true"></span>
+                <span class="lumi-body-m">SIFS Pulse</span>
+              </label>
+
+              <label class="lumi-switch is-hidden" id="gt-switch-wrap" for="switch-gt">
+                <input type="checkbox" id="switch-gt" checked>
+                <span class="lumi-switch__track" aria-hidden="true"></span>
+                <span class="lumi-body-m">Ground Truth</span>
+              </label>
+
+              <button type="button" class="lumi-btn lumi-btn--small" id="btn-calibrate">Calibrate Baseline</button>
+              <button type="button" class="lumi-btn lumi-btn--small is-hidden" id="btn-reset-target">Reset Target</button>
+              <button type="button" class="lumi-btn lumi-btn--small" id="btn-pause">Pause</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div id="live-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  </div>
+  <script defer src="/static/app.js"></script>
+</body>
+</html>
