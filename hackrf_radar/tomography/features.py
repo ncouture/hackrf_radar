@@ -260,7 +260,7 @@ class LinkWindowExtractor:
     def _compute_vital_psd(
         self, obs_list: list[_PacketObs], now: float
     ) -> tuple[np.ndarray | None, float | None, float | None, float]:
-        """Compute alias-free Lomb-Scargle 0.1-25 Hz PSD & respiratory rate (12-24 BPM)."""
+        """Compute alias-free Lomb-Scargle 0.1-25 Hz PSD & respiratory rate (0.18-0.45 Hz)."""
         valid = [
             o
             for o in obs_list
@@ -286,7 +286,7 @@ class LinkWindowExtractor:
             np.complex128
         )
 
-        # Reject macroscopic walking chord-crossing shadow dips (>2.8 dB swing or half-window step)
+        # Reject macroscopic walking chord-crossing shadow dips (>2.85 dB swing or >1.25 dB step)
         # from being misclassified as stationary chest breathing
         mid_n = rssi_arr.size // 2
         rssi_span_90 = float(np.percentile(rssi_arr, 95) - np.percentile(rssi_arr, 5))
@@ -354,7 +354,7 @@ class LinkWindowExtractor:
         pk_pow = max(float(psd_band[pk_idx]), 1e-16)
         pk_coh = float(coherence[pk_idx])
 
-        # Compare peak against same-passband [0.10, 2.20] Hz sidebands (outside +-0.06 Hz of f_pk)
+        # Compare peak against same-passband [0.10, 2.20] Hz sidebands (outside +-0.065 Hz of f_pk)
         side_sel = (
             (f_band >= 0.10) & (f_band <= 2.20) & (np.abs(f_band - f_pk) >= 0.065)
         )
