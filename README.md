@@ -3,8 +3,8 @@
 <img src="./public/hackrf-radar.png" width="640">
 
 
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![Status](https://img.shields.io/badge/status-active-brightgreen.svg)](https://github.com/ncouture/hackrf_radar)
 
 `hackrf-radar` is a passive (`0 dBm` receive-only) indoor multi-human sensing system built around a single HackRF One software-defined radio. It captures ambient IEEE 802.11a/g/n traffic across 2.4 GHz and 5 GHz channels without associating to any network, transmitting any RF energy, or decrypting protected payloads. From cleartext `L-STF`/`L-LTF` preambles and MAC headers, the pipeline estimates 2D human presence maps, walking trajectories, and stationary respiratory rates (`12` to `24 BPM`).
@@ -123,6 +123,23 @@ After inversion, `step()` applies temporal exponential smoothing ($\mathbf{D}_t 
 
 `_attribute_breathing` projects per-chord linear PSDs onto each stationary track's voxel weighted by `sens_target / (1.0 + 8.0 * walker_load)` (down-weighting chords crossed by concurrent walkers) and smooths the `[10.5, 27.5] BPM` rate with a `0.50 / 0.50` EMA.
 
+## HackRF One (1 MHz to 6 GHz) accuracy and physical limits
+
+The `0.1` to `25 Hz` PSD specification is accurate with respect to HackRF One's `1 MHz` to `6 GHz` RF tuning range, while real over-the-air captures remain subject to front-end hardware, protocol, and propagation limits.
+
+### Why the 0.1 to 25 Hz PSD does not conflict with the 1 MHz RF cutoff
+
+The `0.1` to `25 Hz` band is slow-time envelope modulation across packet arrival timestamps rather than an RF carrier frequency tuned by the radio. HackRF One tunes exclusively to 2.4 GHz ISM (`2412` to `2484 MHz`, channels `1..14`) and 5 GHz UNII (`5180` to `5825 MHz`, channels `36..165`) carriers defined in `WIFI_CHANNELS_HZ` (`hackrf_radar/capture/packet_event.py`) and `VALID_WIFI_CHANNELS` (`hackrf_radar/config.py`), all well inside `1 MHz` to `6 GHz`.
+
+Each decoded Wi-Fi packet acts as one discrete sample at arrival time $t_n$. Human chest breathing (`0.18` to `0.45 Hz`, or `10.8` to `27.0 BPM`) and walking micro-Doppler (`1` to `25 Hz`) modulate link attenuation and multipath phase over `10 s`. HackRF's zero-IF DC spike at `0 Hz` baseband does not corrupt this measurement because `_DCBlocker` (`hackrf_radar/capture/soapy_source.py`) subtracts mean I/Q DC offset and 802.11 `L-LTF` leaves the $k = 0$ DC subcarrier unpopulated. Although the Lomb-Scargle PSD is plotted up to `25 Hz` in the UI, respiratory peak detection only searches `0.18` to `0.45 Hz` against `0.10` to `2.20 Hz` sidebands; `2.2` to `25 Hz` displays motion and clutter energy rather than breathing.
+
+### Hardware and propagation limits on live captures
+
+* HackRF One routes `2.3` to `2.7 GHz` signals directly through its MAX2837 transceiver, whereas tuning `5.18` to `5.825 GHz` engages the RFFC5072 mixer, introducing higher noise figure, image spurs, gain roll-off, and larger crystal CFO (`20 ppm` reaches `+-116 kHz` at `5.8 GHz`). Wi-Fi 6E and Wi-Fi 7 in the 6 GHz band (`5925` to `7125 MHz`) and 60 GHz mmWave sit above the `6 GHz` ceiling, and `5` to `12 cm` wavelengths yield `50` to `80 cm` wide First Fresnel Zones over a `5 m` room, limiting spatial resolution to torso-scale blobs (`~0.3` to `0.6 m`).
+* `sample_rate_hz` caps at `20e6` (`hackrf_radar/config.py`), matching a single `20 MHz` 802.11a/g channel (`64` FFT bins at `312.5 kHz`). Wider `40/80/160 MHz` channels cannot be captured in full, and `NativeOFDMBurstDetector` (`hackrf_radar/capture/gr_wifi_bridge.py`) only Viterbi-decodes Non-HT (`6` to `54 Mbps`) MAC headers. When an 802.11n/ac HT-MF frame is detected via rotated QBPSK (`qbpsk_ratio > 2.4`), its MAC addresses cannot be read; unless a single AP is known on that channel, it is tagged `"HT:OFDM:PREAMBLE"` and dropped by `is_unicast_station_mac`, leaving live tomography dependent mostly on legacy-rate management and control frames (`Beacon`, `Probe`, `RTS`/`CTS`, `ACK`, `QoS Null`).
+* With the MAX5864 8-bit ADC (`~45` to `48 dB` quantization range), no hardware AGC, and the `+14 dB` RF amplifier locked off, live `rssi_dbm` (`10 * log10(sig_var) - 45.0` in `hackrf_radar/capture/gr_wifi_bridge.py`) is uncalibrated digital dBFS rather than antenna-port dBm. Explicit baseline calibration (`calibrate_baseline`) cancels fixed gain offsets, whereas uncalibrated path-loss fitting and RSSI ranging assume calibrated dBm. Because a single HackRF antenna cannot measure angle of arrival, `_compute_auto_position` places uncalibrated BSSIDs at a SHA-256 hash perimeter azimuth; accurate room localization requires surveyed anchor coordinates in `configs/example_room.json`.
+* Because `sanitize_csi` removes the affine phase $\alpha + \beta k$ from every packet, pure single-path range shifts cancel out; over-the-air breathing detection relies on a static LOS path beating against scattered chest multipath to create periodic amplitude and nonlinear phase ripple above 8-bit quantization noise. Similarly, HackRF physically receives `Peer_A`'s SIFS `ACK`/`CTS` over `Peer_A -> RX`: while `hackrf_radar/capture/simulator.py` injects synthetic `Peer_A <-> Peer_B` shadowing into `ACK`/`CTS` RSSI and CSI, real open-loop 802.11 `ACK`/`CTS` frames reflect cross-room blockage primarily through missed replies and `seq_gap_rate` rather than direct `ACK` RSSI drops.
+
 ## Hardware setup and gain staging
 
 All live capture paths enforce `0 dBm` passive reception in both configuration (`RxSettings` in `hackrf_radar/config.py`) and driver initialization (`hackrf_radar/capture/soapy_source.py`):
@@ -138,10 +155,10 @@ All live capture paths enforce `0 dBm` passive reception in both configuration (
 
 `hackrf_radar/capture/gr_wifi_bridge.py` and `grc/hackrf_wifi_passive_radar.grc` support multiple live and offline ingestion paths so capture works across varied host installations:
 
-* When `SoapyHackRF` is installed, `HackRFPacketCapture(backend="auto")` streams 20 MSPS CS8 I/Q via `SoapySDR`. When `libHackRFSupport.so` is absent on the host, `"auto"` falls back automatically to `ctypes.CDLL("libhackrf.so.0")`, `gnuradio-osmosdr` (`osmosdr.source("hackrf=0")`), or `hackrf_transfer -r -`.
-* When GNU Radio 3.10 and `gr-ieee802-11` are present, `grc/hackrf_wifi_passive_radar.grc` (or the programmatic flowgraph builder) decodes 802.11 frames and publishes PDUs over ZMQ (`--backend gr_zmq --zmq-endpoint tcp://127.0.0.1:5555`) or Radiotap PCAP (`--mode replay --input capture.pcap`), parsed with Python's `struct` module without requiring `scapy`.
-* When binary `gr-ieee802-11` is not installed, `gr_wifi_bridge.py` executes a native NumPy/SciPy 20 MSPS 802.11a/g/n OFDM burst detector: Schmidl-Cox `L-STF` coarse timing and carrier frequency offset (`CFO`) estimation, `L-LTF` cross-correlation fine symbol alignment, 64-point FFT channel estimation across all 52 active subcarriers (`k in [-26..-1, +1..+26]`, tracking pilots `{-21, -7, +7, +21}`), linear sampling/packet-detection phase slope (`STO`/`PDD`) and random phase offset sanitization, 6 Mbps BPSK `L-SIG` and MAC header demodulation, and IEEE 802.11 CRC-32 (`FCS`) verification.
-* From cleartext MAC headers, the bridge extracts `Beacon` 64-bit `TSF` timestamps to regress per-BSSID clock drift (`ppm`), tracks 12-bit `Sequence Control` gaps per transmitter, and counts `FCS` CRC drops as interference telemetry.
+* When `SoapyHackRF` is installed and enumerates a HackRF device, `HackRFPacketCapture(backend="auto")` streams 20 MSPS CS8 I/Q via `SoapySDR`. Otherwise, `"auto"` falls back automatically to `ctypes.CDLL("libhackrf.so.0")`, `gnuradio-osmosdr` (`osmosdr.source(args="numchan=1 hackrf=0,bias=0")`), or `hackrf_transfer -r -`.
+* When GNU Radio 3.10 and `gr-ieee802-11` are present, `grc/hackrf_wifi_passive_radar.grc` decodes 802.11 frames and publishes PDUs over ZMQ (`--backend gr_zmq --zmq-endpoint tcp://127.0.0.1:5555`), alongside offline Radiotap/802.11 PCAP and PCAPNG replay (`--mode replay --input capture.pcap`), parsed with Python's `struct` module without requiring `scapy`.
+* When binary `gr-ieee802-11` is not installed, `gr_wifi_bridge.py` executes a native NumPy 20 MSPS 802.11a/g/n OFDM burst detector: Schmidl-Cox `L-STF` coarse timing and carrier frequency offset (`CFO`) estimation, `L-LTF` cross-correlation fine symbol alignment, 64-point FFT channel estimation across all 52 active subcarriers (`k in [-26..-1, +1..+26]`, tracking pilots `{-21, -7, +7, +21}`), linear sampling/packet-detection phase slope (`STO`/`PDD`) and random phase offset sanitization, 6 Mbps BPSK `L-SIG` and MAC header demodulation, and IEEE 802.11 CRC-32 (`FCS`) verification.
+* From cleartext MAC headers, the bridge extracts `Beacon` and `ProbeResp` 64-bit `TSF` timestamps to regress per-BSSID clock drift (`ppm`), tracks 12-bit `Sequence Control` gaps per transmitter, and counts `FCS` CRC drops as interference telemetry.
 
 ## Calibrating BSSID anchor positions
 
@@ -155,27 +172,27 @@ Tomographic spatial accuracy depends on knowing the `(x, y)` coordinates (in roo
 
 ## Realtime web interface
 
-`hackrf-radar` includes a browser interface served directly from Python's standard library (`http.server.ThreadingHTTPServer` and `text/event-stream`), requiring no extra web dependencies. Pass `--ui web` to run the browser dashboard standalone, or add `--web` alongside `tui`, `matplotlib`, or `pyqtgraph` to mirror frames to both displays.
+`hackrf-radar` includes a browser interface served directly from Python's standard library (`http.server.ThreadingHTTPServer` and `text/event-stream`), requiring no extra web dependencies. Pass `--ui web` to run the browser dashboard standalone, or add `--web` alongside `tui`, `matplotlib`, or `pyqtgraph` to mirror frames to both displays (configured via `--web-host` and `--web-port`).
 
-The page displays the physical room voxel attenuation map with First Fresnel Zone ellipses, direct and SIFS peer chords, Kalman-tracked human positions and breathing rates, per-chord 52-subcarrier `L-LTF` CSI amplitude and sanitized phase, solver objective convergence (`J(x_k)`), `0.1` to `25 Hz` respiratory PSD, and live RF HUD metrics. Clicking any chord pins its Fresnel zone and subcarrier CSI profile; controls in the lower deck switch solvers (`fista_tv`, `nnls`, `sart`), tune regularization `lambda` and sliding window duration, trigger empty-room baseline calibration, pause rendering, or drag simulated targets in `--mode sim`.
+The page displays the physical room voxel attenuation map with First Fresnel Zone ellipses, direct and SIFS peer chords, Kalman-tracked human positions and breathing rates, per-chord 52-subcarrier `L-LTF` CSI amplitude and sanitized phase, solver objective convergence (`J(x_k)`), `0.1` to `25 Hz` respiratory PSD, and live RF HUD metrics. Clicking any chord pins its Fresnel zone and subcarrier CSI profile; controls in the lower deck switch solvers (`fista_tv`, `nnls`, `sart`), tune regularization `lambda` and sliding window duration, trigger empty-room baseline calibration, pause rendering, or drag and reset simulated targets in `--mode sim`.
 
-HTTP endpoints bind to loopback (`127.0.0.1:8765`) by default and keep passive `0 dBm` RX-only locks enforced:
+HTTP endpoints bind to loopback (`127.0.0.1:8765`) by default, enforce Fetch Metadata (`Sec-Fetch-Site`) same-origin isolation, and keep passive `0 dBm` RX-only locks enforced:
 
 * `GET /` serves the Luminous light/dark web application with a strict Content Security Policy (no inline scripts).
 * `GET /api/stream` streams realtime `config` and `frame` events over Server-Sent Events with drop-oldest backpressure so slow browser tabs do not stall capture.
 * `GET /api/frame`, `GET /api/config`, and `GET /api/health` return the latest serialized `TomographyFrame`, room settings, and server health as JSON.
-* `POST /api/control` accepts same-origin JSON updates for solver method, regularization, observation window, baseline calibration, and simulation target placement while rejecting any `amp_enable`, `bias_tee_enable`, or transmit keys.
+* `POST /api/control` accepts same-origin JSON updates for solver method, regularization (`lam_tv`, `lam_l2`), observation window (`window_s`), `calibrate_baseline` / `reset_sim_targets` actions, and simulation target placement while rejecting any `amp_enable`, `bias_tee_enable`, or transmit keys.
 
 ## Command-line usage
 
-Run the multi-human simulator (1, 2, or 3+ targets) with the realtime web interface, interactive GUI, or headless PNG snapshot export:
+Run the multi-human simulator (1, 2, or 3+ targets) with the realtime web interface, interactive GUI, or headless PNG snapshot export (`--solver`, `--window-s`, `--fps`, `--realtime`, `--fast`, `--no-gt` customize solver, pacing, and overlays):
 
 ```bash
 # Realtime browser tomography UI at http://127.0.0.1:8765/ (streams continuously until Ctrl+C)
 python3 run_radar.py --mode sim --humans 2 --scenario walk_and_breathe --ui web
 
-# Concurrent Rich TUI + realtime web UI on a custom port
-python3 run_radar.py --mode sim --humans 2 --ui tui --web --web-port 8080
+# Concurrent Rich TUI + realtime web UI on a custom host/port
+python3 run_radar.py --mode sim --humans 2 --ui tui --web --web-host 127.0.0.1 --web-port 8080
 
 # 2-human walk + stationary breathing simulation (auto-selects pyqtgraph or matplotlib)
 python3 run_radar.py --mode sim --humans 2 --scenario walk_and_breathe
@@ -196,15 +213,17 @@ Capture live ambient Wi-Fi passively from an attached HackRF One (`0 dBm` RX-onl
 # Live passive HackRF capture across channels 1, 6, and 11 with realtime browser UI
 /usr/bin/python3 run_radar.py --mode live --config configs/example_room.json --channels 1 6 11 --lna-db 24 --vga-db 20 --ui web --record session.jsonl
 
-# Replay a recorded JSONL session, Radiotap PCAP, or raw CS8/CF32 I/Q capture
+# Replay a recorded JSONL session, Radiotap PCAP/PCAPNG, or raw CS8/CF32/NPY I/Q capture
 python3 run_radar.py --mode replay --input session.jsonl --ui matplotlib --save-snapshot replay_check.png
 ```
 
 ## Dual-Python environment and testing
 
-Every module runs under both standard Python 3.12 (`numpy`, `scipy`, `matplotlib`, `rich`) and system `/usr/bin/python3` 3.14 (which additionally provides `pyqtgraph`, `PyQt6`, `SoapySDR`, `gnuradio`, and `osmosdr`):
+Every module requires Python `3.11+` (`pyproject.toml`) and runs under both standard Python 3.11/3.12 (`numpy`, `scipy`, `matplotlib`, `rich`) and system `/usr/bin/python3` 3.14 (which additionally provides `pyqtgraph`, `PyQt6`, `SoapySDR`, `gnuradio`, and `osmosdr`):
 
 ```bash
+ruff check hackrf_radar tests
+ruff format --check hackrf_radar tests
 python3 -m pytest tests/
 /usr/bin/python3 -m pytest tests/
 ```
