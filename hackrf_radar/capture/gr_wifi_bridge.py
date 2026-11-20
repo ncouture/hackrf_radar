@@ -1,12 +1,12 @@
 """GNU Radio 802.11 bridge, Radiotap PCAP reader, and native 20 MSPS OFDM CSI/MAC decoder.
 
 Provides passive (0 dBm RX-only) IEEE 802.11a/g/n/ac/ax cleartext preamble & MAC ingestion:
-  1. Live/file 20 MSPS I/Q via ``HackRFIQSource`` -> native NumPy/SciPy OFDM burst detector:
+  1. Live/file 20 MSPS I/Q via ``HackRFIQSource`` -> native NumPy OFDM burst detector:
      - Schmidl-Cox L-STF coarse timing & CFO estimation
      - L-LTF dual-symbol fine timing & CFO refinement
      - 64-point FFT 52-subcarrier CSI extraction & STO/PDD phase-slope sanitization
      - Rate-1/2, 2/3, 3/4 K=7 (133_8, 171_8) Viterbi L-SIG & MAC demodulation + CRC-32 FCS
-     - SIFS (10/16 us) CTS/ACK peer attribution, 64-bit Beacon TSF drift (ppm), & SeqCtrl gaps
+     - SIFS (10/16 us) CTS/ACK peer attribution, 64-bit Beacon/ProbeResp TSF drift (ppm), & SeqCtrl gaps
   2. Radiotap / raw 802.11 ``.pcap`` & ``.pcapng`` replay parsed via Python ``struct``
   3. GNU Radio ``gr-ieee802-11`` ZMQ SUB PDU ingestion (``--backend gr_zmq``)
 """
@@ -1045,7 +1045,7 @@ class _LinkTelemetryTracker:
 
 
 class NativeOFDMBurstDetector:
-    """Vectorized NumPy/SciPy 20 MSPS 802.11 OFDM preamble, 52-bin CSI, & MAC decoder."""
+    """Vectorized NumPy 20 MSPS 802.11 OFDM preamble, 52-bin CSI, & MAC decoder."""
 
     def __init__(
         self,
