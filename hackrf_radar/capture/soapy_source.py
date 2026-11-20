@@ -3,7 +3,7 @@
 Supports SoapySDR primary backend with automatic live fallback to:
   1. SoapySDR (``driver=hackrf`` / ``gnuradio.soapy``)
   2. ``ctypes.CDLL("libhackrf.so.0")`` direct USB RX streaming
-  3. ``osmosdr.source("hackrf=0,bias=0")``
+  3. ``osmosdr.source(args="numchan=1 hackrf=0,bias=0")``
   4. ``hackrf_transfer -r -`` subprocess RX streaming
   5. ``.cs8`` / ``.cf32`` / ``.npy`` recorded I/Q file replay
 """
@@ -770,7 +770,7 @@ class _HackRFTransferBackend:
 
 
 class _IQFileBackend:
-    """Deterministic replay backend for .cs8 (int8) and .cf32 (complex64) I/Q files."""
+    """Deterministic replay backend for .cs8 (int8), .cf32 (complex64), and .npy I/Q files."""
 
     name = "iq_file"
 

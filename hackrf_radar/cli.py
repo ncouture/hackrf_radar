@@ -143,7 +143,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--duration",
         type=float,
         default=None,
-        help="Capture/simulation duration in seconds (default: 6.0s in sim, continuous until Ctrl+C in live).",
+        help="Capture/simulation duration in seconds (default: 6.0s in sim, continuous until Ctrl+C in live or interactive --ui web sim).",
     )
     parser.add_argument(
         "--save-snapshot",
@@ -422,7 +422,7 @@ def run_pipeline(
         elif args.mode == "replay":
             if not args.input:
                 raise ValueError(
-                    "--mode replay requires --input <path> (.jsonl, .pcap, or .cs8/.cf32)."
+                    "--mode replay requires --input <path> (.jsonl, .pcap/.pcapng, or .cs8/.cf32/.npy)."
                 )
             in_path = Path(args.input)
             if not in_path.is_file():
