@@ -1,9 +1,10 @@
-"""Multi-Human Live Tomographic Radar Dashboard (PyQtGraph, Matplotlib, and Rich TUI).
+"""Multi-Human Live Tomographic Radar Dashboard (PyQtGraph, Matplotlib, Rich TUI, and Web).
 
 Supports:
 - ``pyqtgraph``: High-FPS Qt radar display (supports X11 and ``QT_QPA_PLATFORM=offscreen``).
 - ``matplotlib``: 4-panel scientific dashboard (supports interactive X11 and headless ``Agg``).
 - ``tui``: Rich live ANSI Truecolor Unicode half-block 2D heatmap + telemetry HUD for SSH/TTY.
+- ``web``: Stdlib HTTP + Server-Sent Events (SSE) realtime Luminous browser dashboard.
 - ``auto``: Picks ``pyqtgraph`` when installed & GUI active, else ``matplotlib``, or ``tui`` when ``--no-gui``.
 """
 

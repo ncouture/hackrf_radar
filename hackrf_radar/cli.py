@@ -131,7 +131,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--input",
         type=str,
         default=None,
-        help="Input file path for --mode replay (.jsonl, .pcap/.pcapng, or .cs8/.cf32 I/Q).",
+        help="Input file path for --mode replay (.jsonl, .pcap/.pcapng, or .cs8/.cf32/.npy I/Q).",
     )
     parser.add_argument(
         "--record",
